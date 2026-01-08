@@ -304,25 +304,25 @@ rm .agentmem/notes.md  # 或归档（如需保留）
 为了确保产出质量，请参考以下资源：
 
 ### 1. 结构模板
-在创建核心文件时，**必须参考** `{{TEMPLATE_DIR}}` 下的模板，保持结构一致性：
+在创建核心文件时，**必须参考** `.flowmem/templates` 下的模板，保持结构一致性：
 - `project.md` → 使用 `project-mature.md` 模板
 - `request.md` → 包含澄清对话和自检部分
 - `todolist.md` → 包含执行日志和问题记录
 - `docs/*` → 使用对应的专业模板
 
 ### 2. Few-Shot 示例
-遇到复杂场景不知如何下手时，请阅读 `{{EXAMPLE_DIR}}` 下的真实案例：
-- **新功能开发**：参考 `{{EXAMPLE_DIR}}/01-new-feature/`
-- **重构**：参考 `{{EXAMPLE_DIR}}/02-refactor/`
-- **调试**：参考 `{{EXAMPLE_DIR}}/03-debug/`
+遇到复杂场景不知如何下手时，请阅读 `.flowmem/examples` 下的真实案例：
+- **新功能开发**：参考 `.flowmem/examples/01-new-feature/`
+- **重构**：参考 `.flowmem/examples/02-refactor/`
+- **调试**：参考 `.flowmem/examples/03-debug/`
 
 ### 3. 辅助工具 (AI 专用)
 为提高效率，请**优先使用**以下脚本而非手动操作：
-- **上下文刷新**：`{{SCRIPT_DIR}}/refresh-context.sh` (一次性读取核心文件，节省 Token)
-- **任务归档**：`{{SCRIPT_DIR}}/archive-task.sh` (任务完成后自动清理现场)
+- **上下文刷新**：`.flowmem/scripts/refresh-context.sh` (一次性读取核心文件，节省 Token)
+- **任务归档**：`.flowmem/scripts/archive-task.sh` (任务完成后自动清理现场)
 
 ### 4. 最佳实践指南
-**强烈建议**在遇到以下情况时阅读 `{{DOCS_DIR}}/best-practices.md`：
+**强烈建议**在遇到以下情况时阅读 `.flowmem/docs/best-practices.md`：
 - 接手一个新项目（冷启动流程）
 - 不确定如何拆分文档时
 - 发现自己陷入循环或死胡同时

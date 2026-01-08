@@ -39,31 +39,9 @@ TARGET_DIR=$(pwd)
 echo -e "目标目录: ${GREEN}$TARGET_DIR${NC}"
 echo ""
 
-# 创建 .agentmem 目录结构
+# 定义核心目录变量
 AGENTMEM_DIR=".agentmem"
 
-if [ -d "$AGENTMEM_DIR" ]; then
-    echo -e "${YELLOW}警告: $AGENTMEM_DIR 目录已存在${NC}"
-    read -p "是否覆盖? (y/N) " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        echo "已取消初始化"
-        exit 0
-    fi
-fi
-
-echo -e "${BLUE}正在创建目录结构...${NC}"
-
-# 创建目录
-mkdir -p "$AGENTMEM_DIR"
-mkdir -p "$AGENTMEM_DIR/docs"
-mkdir -p "$AGENTMEM_DIR/docs/modules"
-mkdir -p "$AGENTMEM_DIR/request_detail"
-mkdir -p "$AGENTMEM_DIR/history"
-
-echo -e "  ✓ 创建 $AGENTMEM_DIR/"
-echo -e "  ✓ 创建 $AGENTMEM_DIR/docs/"
-echo -e "  ✓ 创建 $AGENTMEM_DIR/docs/modules/"
 # 主逻辑
 main() {
     # 1. 初始化目录结构
@@ -73,14 +51,21 @@ main() {
     echo "正在生成所有适配器配置..."
     
     # 2.1 Claude Code
-    mkdir -p .claude/skills/context-memory
-    local dest=".claude/skills/context-memory/SKILL.md"
+    mkdir -p .claude/skills/context-memory-system
+    local dest=".claude/skills/context-memory-system/SKILL.md"
     echo "---" > "$dest"
     echo "name: context-memory-system" >> "$dest"
     echo "description: 使用持久化 Markdown 文件管理 AI 工作记忆。在开始复杂任务、多步骤项目时自动激活。" >> "$dest"
     echo "---" >> "$dest"
     echo "" >> "$dest"
-    cat "$SCRIPT_DIR/../adapters/common-rules.md" >> "$dest"
+    # 手动替换并追加
+    sed -e "s|{{SETUP_SCRIPT}}|.agentmem/scripts/setup.sh|g" \
+        -e "s|{{TEMPLATE_DIR}}|.agentmem/templates|g" \
+        -e "s|{{EXAMPLE_DIR}}|.agentmem/examples|g" \
+        -e "s|{{SCRIPT_DIR}}|.agentmem/scripts|g" \
+        -e "s|{{DOCS_DIR}}|.agentmem/docs|g" \
+        "$SCRIPT_DIR/../adapters/common-rules.md" >> "$dest"
+            
     echo "✅ 已生成 Claude Code Skill: $dest"
 
     # 2.2 Cursor
@@ -136,6 +121,16 @@ main() {
     else
         echo "⚠️  未找到 best-practices.md，跳过复制"
     fi
+
+    # 3.4 复制辅助脚本 (实现自包含)
+    if [ -f "$SCRIPT_DIR/archive-task.sh" ] && [ -f "$SCRIPT_DIR/refresh-context.sh" ]; then
+        cp "$SCRIPT_DIR/archive-task.sh" "$AGENTMEM_DIR/scripts/"
+        cp "$SCRIPT_DIR/refresh-context.sh" "$AGENTMEM_DIR/scripts/"
+        chmod +x "$AGENTMEM_DIR/scripts/"*.sh
+        echo "✅ 已复制辅助脚本到 .agentmem/scripts/ (并赋予执行权限)"
+    else
+        echo "⚠️  未找到辅助脚本，跳过复制"
+    fi
     
     # 完成
     echo ""
@@ -155,6 +150,7 @@ init_directory_structure() {
     mkdir -p "$AGENTMEM_DIR/docs/modules"
     mkdir -p "$AGENTMEM_DIR/request_detail"
     mkdir -p "$AGENTMEM_DIR/history"
+    mkdir -p "$AGENTMEM_DIR/scripts"
 
     echo -e "  ✓ 创建 $AGENTMEM_DIR/"
     echo -e "  ✓ 创建 $AGENTMEM_DIR/docs/"
@@ -162,6 +158,7 @@ init_directory_structure() {
     echo -e "  ✓ 创建 $AGENTMEM_DIR/docs/modules/"
     echo -e "  ✓ 创建 $AGENTMEM_DIR/request_detail/"
     echo -e "  ✓ 创建 $AGENTMEM_DIR/history/"
+    echo -e "  ✓ 创建 $AGENTMEM_DIR/scripts/"
     
     # 创建模板参考目录
     mkdir -p "$AGENTMEM_DIR/templates"
@@ -203,7 +200,7 @@ copy_template() {
     fi
 }
 
-# 辅助函数：复制规则文件
+# 辅助函数：复制规则文件（带占位符替换）
 copy_rule_file() {
     local src="$SCRIPT_DIR/../$1"
     local dest="$2"
@@ -214,15 +211,34 @@ copy_rule_file() {
         mkdir -p "$dest_dir"
     fi
     
+    # 替换规则：
+    # {{SETUP_SCRIPT}} -> .agentmem/scripts/setup.sh (实际上 setup script 是 init 脚本的变体，这里指向辅助脚本)
+    # Init 模式下，辅助脚本在 .agentmem/scripts/
+    # {{TEMPLATE_DIR}} -> .agentmem/templates
+    # {{EXAMPLE_DIR}}  -> .agentmem/examples
+    # {{SCRIPT_DIR}}   -> .agentmem/scripts
+    # {{DOCS_DIR}}     -> .agentmem/docs
+    
+    local ASSETS_DIR=".agentmem"
+    
+    process_and_copy() {
+        sed -e "s|{{SETUP_SCRIPT}}|${ASSETS_DIR}/scripts/setup.sh|g" \
+            -e "s|{{TEMPLATE_DIR}}|${ASSETS_DIR}/templates|g" \
+            -e "s|{{EXAMPLE_DIR}}|${ASSETS_DIR}/examples|g" \
+            -e "s|{{SCRIPT_DIR}}|${ASSETS_DIR}/scripts|g" \
+            -e "s|{{DOCS_DIR}}|${ASSETS_DIR}/docs|g" \
+            "$src" > "$dest"
+    }
+
     if [ -f "$dest" ]; then
         read -p "⚠️  文件 $dest 已存在，覆盖吗？(y/N) " overwrite
         if [[ $overwrite =~ ^[Yy]$ ]]; then
-            cp "$src" "$dest"
+            process_and_copy
         else
             echo "已跳过 $dest"
         fi
     else
-        cp "$src" "$dest"
+        process_and_copy
     fi
 }
 

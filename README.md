@@ -26,7 +26,20 @@
 
 ## 快速开始
 
-### 1. 初始化项目
+## 快速开始
+
+### 方式一：直接复制分发包 (推荐) ✅
+
+这是最简单、最符合 Agentic 理念的安装方式。你只需要复制一个文件夹，剩下的交给 AI。
+
+1. **下载分发包**：从 `dist/` 目录中选择适合你的编辑器（如 `dist/cursor`）。
+2. **复制到项目**：将文件夹内的内容（`.cursorrules` 和 `.flowmem/` 等）直接复制到你的项目根目录。
+3. **开始对话**：打开你的 AI 编辑器，新建一个对话。AI 会自动检测到规则，并提示你："我需要运行初始化脚本吗？"
+4. **AI 自动初始化**：AI 会自动运行 `.flowmem/scripts/setup.sh`，生成 `.agentmem/` 运行时目录。
+
+### 方式二：使用初始化脚本 (开发者模式)
+
+如果你是 FlowMem 的开发者，或者想从源码安装：
 
 ```bash
 # 克隆仓库
@@ -37,21 +50,28 @@ cd /path/to/your/project
 /path/to/FlowMem/scripts/init-agentmem.sh
 ```
 
-### 2. 目录结构
+---
 
-初始化后，你的项目会有以下结构：
+## 目录结构
 
+### 1. 静态资源 (只读)
+复制进来的 `.flowmem/` 目录包含：
+- `scripts/` - AI 运行时脚本 (`setup.sh` 等)
+- `templates/` - 各种 Markdown 模板
+- `examples/` - Few-Shot 示例
+- `docs/` - 最佳实践文档
+
+### 2. 运行时记忆 (读写)
+AI 自动生成的 `.agentmem/` 目录包含：
 ```
-your-project/
-├── .agentmem/                 # AI 系统专用目录
-│   ├── project.md             # 项目整体描述（长期维护）
-│   ├── request.md             # 当前需求文档（任务周期）
-│   ├── todolist.md            # 任务待办列表（任务周期）
-│   ├── notes.md               # 研究笔记（可选）
-│   ├── docs/                  # 详细文档目录
-│   ├── request_detail/        # 需求对话详情
-│   └── history/               # 历史版本归档
-└── [项目文件...]
+.agentmem/
+├── project.md             # 项目整体描述（长期维护）
+├── request.md             # 当前需求文档（任务周期）
+├── todolist.md            # 任务待办列表（任务周期）
+├── notes.md               # 研究笔记（可选）
+├── docs/                  # 详细文档目录
+├── request_detail/        # 需求对话详情
+└── history/               # 历史版本归档
 ```
 
 ### 3. 配置你的 AI 工具
@@ -71,7 +91,11 @@ your-project/
 | **Copilot** | 项目根目录 `.github/copilot-instructions.md` |
 | **Gemini** | `~/.gemini/` 或项目内文件 |
 
-> **Claude Code 用户**：建议使用初始化脚本。它会自动将通用规则转换为 Claude Skill 格式 (`.claude/skills/context-memory/SKILL.md`)。如果你必须手动配置，请复制 `adapters/common-rules.md` 内容，并在文件开头添加必要的 YAML frontmatter。
+> **Claude Code 用户**：
+> - Claude Code 采用 **Self-Contained（自包含）** 设计，所有模板都在 Skill 目录内
+> - **项目级安装**：复制 `dist/claude-code/.claude/` 到项目根目录
+> - **全局安装**：复制 `.claude/skills/context-memory-system/` 到 `~/.claude/skills/`
+> - 整个 Skill 目录是完整的，无论安装在哪里都能正常工作
 
 ---
 

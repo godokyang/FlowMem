@@ -56,9 +56,11 @@ your-project/
 
 ### 3. 配置你的 AI 工具
 
-运行初始化脚本时，你可以选择你的 AI 工具，通过交互式菜单自动配置。
+运行初始化脚本时，它会自动为所有支持的 AI 工具（Claude, Cursor, Windsurf, Trae, Cline, Copilot, Gemini）生成配置文件。你只需直接使用适合你的工具即可。
 
-或者，手动复制通用规则文件 `adapters/common-rules.md`：
+> **提示**：生成的配置文件（如 `.cursorrules`）已添加到 `.gitignore` 中，不会污染你的 Git 仓库。
+
+或者，若需手动配置，可复制 `adapters/common-rules.md`：
 
 | AI 工具 | 目标位置 |
 |--------|----------|

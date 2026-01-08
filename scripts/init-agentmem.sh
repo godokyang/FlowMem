@@ -69,68 +69,49 @@ main() {
     # 1. 初始化目录结构
     init_directory_structure
 
-    echo ""
-    echo "clipboard: 选择你的 AI 助手/编辑器："
-    echo "1) Claude Code (动态生成 Skill)"
-    echo "2) Cursor"
-    echo "3) Windsurf"
-    echo "4) Trae"
-    echo "5) Cline (Roo)"
-    echo "6) Antigravity (Gemini)"
-    echo "7) VS Code Copilot"
-    echo "8) 其他 (仅复制通用规则)"
+    # 2. 生成所有适配器规则
+    echo "正在生成所有适配器配置..."
     
-    read -p "请输入序号 (1-8) [1]: " tool_choice
-    tool_choice=${tool_choice:-1}
+    # 2.1 Claude Code
+    mkdir -p .claude/skills/context-memory
+    local dest=".claude/skills/context-memory/SKILL.md"
+    echo "---" > "$dest"
+    echo "name: context-memory-system" >> "$dest"
+    echo "description: 使用持久化 Markdown 文件管理 AI 工作记忆。在开始复杂任务、多步骤项目时自动激活。" >> "$dest"
+    echo "---" >> "$dest"
+    echo "" >> "$dest"
+    cat "$SCRIPT_DIR/../adapters/common-rules.md" >> "$dest"
+    echo "✅ 已生成 Claude Code Skill: $dest"
 
-    # 2. 复制规则文件
-    case $tool_choice in
-        1)
-            # 动态生成 Claude Skill
-            mkdir -p .claude/skills/context-memory
-            local dest=".claude/skills/context-memory/SKILL.md"
-            echo "---" > "$dest"
-            echo "name: context-memory-system" >> "$dest"
-            echo "description: 使用持久化 Markdown 文件管理 AI 工作记忆。在开始复杂任务、多步骤项目时自动激活。" >> "$dest"
-            echo "---" >> "$dest"
-            echo "" >> "$dest"
-            cat "$SCRIPT_DIR/../adapters/common-rules.md" >> "$dest"
-            echo "✅ 已生成 Claude Code Skill: $dest"
-            ;;
-        2)
-            copy_rule_file "adapters/common-rules.md" ".cursorrules"
-            echo "✅ 已配置 Cursor 规则 (.cursorrules)"
-            ;;
-        3)
-            copy_rule_file "adapters/common-rules.md" ".windsurfrules"
-            echo "✅ 已配置 Windsurf 规则 (.windsurfrules)"
-            ;;
-        4)
-            mkdir -p .trae/rules
-            copy_rule_file "adapters/common-rules.md" ".trae/rules/context-memory.md"
-            echo "✅ 已配置 Trae 规则 (.trae/rules/context-memory.md)"
-            ;;
-        5)
-            copy_rule_file "adapters/common-rules.md" ".clinerules"
-            echo "✅ 已配置 Cline 规则 (.clinerules)"
-            ;;
-        6)
-            # 尝试复制到用户根目录或项目目录
-            echo "配置 Gemini 规则..."
-            echo "建议手动将 rules.md 内容添加到你的 system instructions 中"
-            copy_rule_file "adapters/common-rules.md" "gemini-rules.md"
-            echo "✅ 已在项目根目录创建 gemini-rules.md"
-            ;;
-        7)
-            mkdir -p .github
-            copy_rule_file "adapters/common-rules.md" ".github/copilot-instructions.md"
-            echo "✅ 已配置 Copilot 规则 (.github/copilot-instructions.md)"
-            ;;
-        *)
-            copy_rule_file "adapters/common-rules.md" "agentmem-rules.md"
-            echo "✅ 已复制通用规则到 agentmem-rules.md"
-            ;;
-    esac
+    # 2.2 Cursor
+    copy_rule_file "adapters/common-rules.md" ".cursorrules"
+    echo "✅ 已生成 Cursor 规则 (.cursorrules)"
+
+    # 2.3 Windsurf
+    copy_rule_file "adapters/common-rules.md" ".windsurfrules"
+    echo "✅ 已生成 Windsurf 规则 (.windsurfrules)"
+
+    # 2.4 Trae
+    mkdir -p .trae/rules
+    copy_rule_file "adapters/common-rules.md" ".trae/rules/context-memory.md"
+    echo "✅ 已生成 Trae 规则 (.trae/rules/context-memory.md)"
+
+    # 2.5 Cline (Roo)
+    copy_rule_file "adapters/common-rules.md" ".clinerules"
+    echo "✅ 已生成 Cline 规则 (.clinerules)"
+
+    # 2.6 Gemini
+    copy_rule_file "adapters/common-rules.md" "gemini-rules.md"
+    echo "✅ 已生成 Gemini 规则 (gemini-rules.md)"
+
+    # 2.7 VS Code Copilot
+    mkdir -p .github
+    copy_rule_file "adapters/common-rules.md" ".github/copilot-instructions.md"
+    echo "✅ 已生成 Copilot 规则 (.github/copilot-instructions.md)"
+
+    # 2.8 通用规则
+    copy_rule_file "adapters/common-rules.md" "agentmem-rules.md"
+    echo "✅ 已生成通用规则 (agentmem-rules.md)"
 
     # 3. 复制模板文件
     copy_template "project.md" ".agentmem/project.md"

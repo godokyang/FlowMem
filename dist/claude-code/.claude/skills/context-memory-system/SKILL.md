@@ -17,7 +17,8 @@ description: FlowMem 上下文记忆系统。使用持久化 Markdown 文件管�
 |------|------|----------|
 | `.agentmem/project.md` | 项目整体描述 | 长期维护 |
 | `.agentmem/request.md` | 当前需求澄清 | 任务周期 |
-| `.agentmem/todolist.md` | 任务分解与进度 | 任务周期 |
+| `.agentmem/todolist.md` | 任务清单(仅列表) | 任务周期 |
+| `.agentmem/task_logs/` | 执行日志/总结/问题 | 任务周期 |
 | `.agentmem/notes.md` | 研究笔记 | 按需使用 |
 | `.agentmem/docs/` | 详细文档目录 | 长期积累 |
 | `.agentmem/request_detail/` | 需求对话详情 | 任务周期 |
@@ -99,31 +100,18 @@ flowchart TD
 
 ## 📢 动作输出规范
 
-**目的:** 让用户知道 FlowMem 流程是否启用及当前执行步骤。
+执行关键动作时必须输出提示,让用户知道 FlowMem 流程状态:
 
-### 必须输出的关键动作
+| 动作 | 输出格式 |
+|------|----------|
+| 流程启动 | 🚀 **FlowMem 已启动** - 触发原因: [信号] |
+| 文件操作 | 📝 **[创建/读取/更新/归档]**: `.agentmem/[文件名]` |
+| 上下文刷新 | 🔄 **刷新上下文** - 当前 Todo: [任务] |
+| 需求澄清 | ❓ **需求澄清** (第 X 轮) - 待确认: [问题] |
+| 知识补充 | 💡 **知识沉淀** - 补充到: [文件] |
+| 任务归档 | ✅ **任务完成** - 已归档: [文件列表] |
 
-执行以下动作时必须输出提示:
-
-| 动作 | 格式 |
-|------|------|
-| **流程启动** | 🚀 **FlowMem 已启动** - 触发原因: [信号] |
-| **文件操作** | 📝 **[创建/读取/更新/归档]**: `.agentmem/[文件名]` |
-| **上下文刷新** | 🔄 **刷新上下文** - 当前 Todo: [任务] |
-| **需求澄清** | ❓ **需求澄清** (第 X 轮) - 待确认: [问题] |
-| **知识补充** | 💡 **知识沉淀** - 补充到: [文件] |
-| **任务归档** | ✅ **任务完成** - 已归档: [文件列表] |
-
-### 示例
-
-```
-🚀 **FlowMem 已启动** - 触发原因: 涉及 5+ 文件修改
-📝 **创建**: `.agentmem/project.md`
-📝 **创建**: `.agentmem/request.md`
-❓ **需求澄清** (第 1 轮) - 待确认: 是否需要向后兼容?
-```
-
-**规则:** 每个关键动作必须输出,不允许静默执行
+**示例:** `🚀 **FlowMem 已启动** - 触发原因: 涉及 5+ 文件修改`
 
 ---
 
@@ -182,14 +170,14 @@ flowchart TD
 
 **强制时序:** 执行 Todo → 立即更新 todolist.md → 执行下一个 Todo
 
-**禁止:**
-- ❌ 连续执行多个 Todo 后才统一更新
-- ❌ 心里记住"待会儿更新"
+**todolist.md 职责:**
+- ✅ 仅记录任务清单 `[ ]` `[/]` `[x]` + 简短描述(1-2 行)
+- ❌ 禁止写详细日志/总结/问题分析 → 存入 `task_logs/[ID].md`,只放链接
 
-**正确:**
-```
-✅ 执行 Todo 1 → 更新 → 执行 Todo 2 → 更新
-❌ 执行 Todo 1 → 执行 Todo 2 → 执行 Todo 3 → 更新
+**示例:**
+```markdown
+- [x] 实现用户登录 → [详细日志](task_logs/001-login.md)
+- [/] 添加权限验证
 ```
 
 ### 规则 5: 存储而非填充
@@ -317,7 +305,8 @@ rm .agentmem/notes.md
 ### 结构模板
 - `.claude/skills/context-memory-system/templates/project-mature.md` - project.md 模板
 - `.claude/skills/context-memory-system/templates/request.md` - 包含澄清对话和自检
-- `.claude/skills/context-memory-system/templates/todolist.md` - 包含执行日志和问题记录
+- `.claude/skills/context-memory-system/templates/todolist.md` - 精简版,仅任务清单
+- `.claude/skills/context-memory-system/templates/task_log.md` - 单个任务的详细日志模板
 
 ### Few-Shot 示例
 - `.claude/skills/context-memory-system/examples/01-new-feature/` - 新功能开发

@@ -23,7 +23,9 @@ project_root/
 ├── .agentmem/                         # AI 系统专用目录
 │   ├── project.md               # 项目整体描述（AI 快速了解项目的入口）
 │   ├── request.md               # 当前需求文档（多轮交流澄清需求）
-│   ├── todolist.md              # 任务待办列表（需求确定后生成）
+│   ├── todolist.md              # 任务待办列表（仅清单,需求确定后生成）
+│   ├── task_logs/               # 任务执行日志（详细记录）
+│   │   └── [任务ID]-[描述].md
 │   ├── notes.md                 # 研究笔记与发现（可选）
 │   ├── docs/                    # 详细文档目录（大型项目逐步积累）
 │   │   ├── business-logic.md
@@ -41,7 +43,8 @@ project_root/
 |------|------|----------|----------|
 | `project.md` | 项目概览 | 让 AI 用最少上下文快速了解整个项目 | 长期维护 |
 | `request.md` | 需求澄清 | 承载当前任务的多轮交流，逐步完善需求 | 任务周期 |
-| `todolist.md` | 执行计划 | 需求确定后的任务分解与进度追踪 | 任务周期 |
+| `todolist.md` | 任务清单 | 仅记录任务列表和状态（精简） | 任务周期 |
+| `task_logs/` | 执行日志 | 详细执行过程、问题、解决方案 | 任务周期 |
 | `notes.md` | 研究笔记 | 临时信息、中间发现、参考资料 | 按需使用 |
 
 ---
@@ -337,34 +340,34 @@ src/
 - [ ] 已转为 TodoList，执行中
 ```
 
-#### 3. todolist.md — 执行计划
+#### 3. todolist.md — 任务清单
 
-> **前置条件：** 仅在 `request.md` 中的需求被用户确认后才创建此文件。
+> **前置条件:** 仅在 `request.md` 中的需求被用户确认后才创建此文件。
+> **职责:** 仅记录任务列表和状态,保持精简。详细执行日志存入 `task_logs/`。
 
 ```markdown
-# 任务列表：[需求标题]
+# 任务列表:[需求标题]
 
 ## 关联需求
 来源: `.agentmem/request.md`
 需求摘要: [从 request.md 复制的需求目标]
 
 ## 待办事项
-- [ ] **TODO-001**: [任务描述]
+- [ ] **TODO-001**: [任务描述] → [详细日志](task_logs/001-task-name.md)
   - 预计: [预估工作量/时间]
   - 依赖: [依赖的文件或任务]
 - [/] **TODO-002**: [正在进行的任务] ← 当前
 - [x] **TODO-003**: [已完成的任务]
-  - 完成: [实际完成情况简述]
 
-## 执行日志
-### TODO-003 执行记录
-- **开始**: [时间]
-- **操作**: [具体做了什么]
-- **结果**: [结果摘要]
-- **完成**: [时间]
+## 进度统计
+- 总任务数: X
+- 已完成: X
+- 进行中: X
+- 未开始: X
 
-## 遇到的问题
-- [问题描述] → [解决方案]
+---
+
+**重要:** 详细执行日志、遇到的问题等记录在 `task_logs/[任务ID]-[描述].md` 中
 ```
 
 #### 4. notes.md — 研究笔记（可选）
@@ -519,8 +522,8 @@ src/
 #### 规则 4: 单步执行，及时更新
 每次只执行一个 Todo 项，完成后立即更新 `todolist.md`：
 - 标记当前项为 `[x]`
-- 记录执行结果到"执行日志"
 - 将下一项标记为 `[/]`
+- 详细执行日志、遇到的问题等记录到 `task_logs/[任务ID]-[描述].md`
 
 #### 规则 5: 存储而非填充
 长篇内容存入文件，上下文中只保留路径引用。
@@ -547,6 +550,7 @@ src/
 | 归档 | `request.md` → `history/[日期]_request_xxx.md` | 保留完整记录 |
 | 归档 | `request_detail/*` → `history/[日期]_request_detail/` | 对话详情一并归档 |
 | 归档 | `todolist.md` → `history/[日期]_todolist_xxx.md` | 保留执行记录 |
+| 归档 | `task_logs/` → `history/[日期]_task_logs/` | 详细日志一并归档 |
 | 删除 | `notes.md` | 任务特定信息不再需要 |
 | 保留 | `project.md` 和 `docs/` | 长期知识库保留 |
 
@@ -555,6 +559,7 @@ src/
 mv .agentmem/request.md .agentmem/history/20260108_request_支付模块集成.md
 mv .agentmem/request_detail/ .agentmem/history/20260108_request_detail/
 mv .agentmem/todolist.md .agentmem/history/20260108_todolist_支付模块集成.md
+mv .agentmem/task_logs/ .agentmem/history/20260108_task_logs/
 rm .agentmem/notes.md  # 或归档（如需保留）
 ```
 
@@ -566,9 +571,11 @@ rm .agentmem/notes.md  # 或归档（如需保留）
 |---------------|---------------|
 | 使用 AI 内置记忆进行持久化 | 创建 `.agentmem/` 目录下的 Markdown 文件 |
 | 只说一次目标然后就忘了 | 在每次重大决策前重新阅读 todolist.md |
-| 隐藏错误并静默重试 | 将错误记录到"遇到的问题"部分 |
+| 隐藏错误并静默重试 | 将错误记录到 task_logs 中 |
 | 将所有内容塞进上下文 | 长篇内容存入文件，上下文只保留路径 |
 | 不澄清需求直接开始执行 | 通过 request.md 多轮交流确认需求 |
+| todolist 写详细日志 | 存入 task_logs/，只放链接 |
+| 需求变更不记录 | 立即更新 request.md |
 | 一次性做大规模修改 | 单步执行 Todo，及时更新状态 |
 | 修改之前的历史消息 | 始终追加新信息，保持上下文稳定 |
 
@@ -589,9 +596,12 @@ rm .agentmem/notes.md  # 或归档（如需保留）
 行动: Read config.json
 错误: File not found
 
-# 更新 todolist.md:
+# 记录到 task_logs/[任务ID].md:
 ## 遇到的问题
 - 未找到 config.json → 将创建默认配置
+
+# 更新 todolist.md:
+- [/] TODO-001: 配置系统 → [详细日志](task_logs/001-config.md)
 
 行动: Write config.json (创建默认配置)
 行动: Read config.json

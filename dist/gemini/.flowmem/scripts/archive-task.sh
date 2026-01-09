@@ -84,6 +84,15 @@ if [ -f "$AGENTMEM_DIR/todolist.md" ]; then
     ((ARCHIVED++))
 fi
 
+# 归档 task_logs 目录
+if [ -d "$AGENTMEM_DIR/task_logs" ] && [ "$(ls -A $AGENTMEM_DIR/task_logs 2>/dev/null)" ]; then
+    ARCHIVE_DIR="${DATE_PREFIX}_task_logs_${TASK_NAME}"
+    mv "$AGENTMEM_DIR/task_logs" "$HISTORY_DIR/$ARCHIVE_DIR"
+    mkdir -p "$AGENTMEM_DIR/task_logs"  # 重新创建空目录
+    echo -e "  ✓ 归档 task_logs/ → history/$ARCHIVE_DIR/"
+    ((ARCHIVED++))
+fi
+
 # 归档 notes.md (默认归档，不删除)
 if [ -f "$AGENTMEM_DIR/notes.md" ]; then
     ARCHIVE_NAME="${DATE_PREFIX}_notes_${TASK_NAME}.md"

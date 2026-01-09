@@ -2,7 +2,7 @@
 
 > 使用持久化 Markdown 文件管理 AI 工作记忆,解决上下文窗口限制和目标漂移问题。
 
-> 📖 **详细示例**: 需要更多说明和示例?请查看 [common-rules-examples.md](common-rules-examples.md)
+> 📖 **详细示例**: 需要更多说明和示例?请查看 [common-rules-examples.md](`.flowmem/docs/common-rules-examples.md`)
 
 ---
 

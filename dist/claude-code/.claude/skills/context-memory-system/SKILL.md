@@ -5,6 +5,11 @@ description: FlowMem 上下文记忆系统。使用持久化 Markdown 文件管�
 
 # 上下文记忆系统规则
 
+> 🛑 **三秒检查 (每次行动前):**
+> 1. 刚检索了吗？→ 沉淀了吗？
+> 2. 要创建文件了吗？→ 该更新的更新了吗？
+> 3. 用户回复了吗？→ 文档同步了吗？
+
 > 使用持久化 Markdown 文件管理 AI 工作记忆,解决上下文窗口限制和目标漂移问题。
 
 > 📖 **详细示例**: 需要更多说明和示例?请查看 [common-rules-examples.md](.flowmem/docs/common-rules-examples.md)
@@ -60,9 +65,9 @@ description: FlowMem 上下文记忆系统。使用持久化 Markdown 文件管�
 **用途:** 记录原始需求和多轮澄清对话
 
 **拆分规则:** 
-- 当对话超过 5 轮或文件超过 150 行时,将详细对话内容移至 `request_detail/round-[N].md`
+- 当对话超过 5 轮或文件超过 150 行时,将已有的全部详细对话内容移至 `request_detail/round-[N].md`（N 为拆分序号,非对话轮次）
 - request.md 中保留:原始需求、最终确认的需求、状态标记
-- request_detail/ 中存储:每轮的详细对话记录
+- request_detail/ 中存储:每次拆分时迁移的详细对话记录
 
 #### notes.md - 研究笔记
 **用途:** 存储任务特定的临时信息和研究发现
@@ -117,17 +122,15 @@ description: FlowMem 上下文记忆系统。使用持久化 Markdown 文件管�
 ```
 读取/创建 project.md 
     → 检索理解项目 
-    → 【补充 project.md】 
+    → 🛑 停！检索到的新知识沉淀了吗？
     → 创建 request.md 
     → 多轮澄清需求 
-    → 用户确认 
+    → 🛑 停！用户确认了吗？
     → 生成 todolist.md 
-    → 执行 Todo(刷新上下文 → 检索补充知识 → 【立即沉淀】 → 执行任务 → 更新状态)
+    → 执行 Todo(刷新上下文 → 检索 → 🛑沉淀 → 执行 → 更新状态)
     → 循环直到完成 
     → 归档任务
 ```
-
-> ⚠️ **【】标记的步骤是强制检查点**，每次检索后必须执行知识沉淀
 
 ---
 
@@ -174,7 +177,7 @@ description: FlowMem 上下文记忆系统。使用持久化 Markdown 文件管�
 
 **流程:**
 1. 创建 `request.md`,记录原始需求
-2. AI 提出澄清问题(至少 1 轮)
+2. AI 提出澄清问题(至少 1 轮,**豁免:** 用户明确要求「直接执行」「跳过确认」时可省略)
 3. **用户回答后立即更新 `request.md`**
 4. 循环直到需求明确
 5. **用户确认后先更新状态为「已确认」,再生成 `todolist.md`**
@@ -183,7 +186,6 @@ description: FlowMem 上下文记忆系统。使用持久化 Markdown 文件管�
 - 必须等用户明确回复「确认」「开始」「可以执行」等肯定词才能开始执行
 - 即使需求看起来很清晰,也必须至少进行 1 轮澄清确认
 - 禁止假设"需求已明确"而跳过确认环节
-- **豁免条件:** 用户明确要求「直接执行」「跳过确认」时可省略澄清环节
 
 ⚠️ 禁止用户回复后直接开始执行,必须先更新文档。
 
@@ -215,34 +217,28 @@ description: FlowMem 上下文记忆系统。使用持久化 Markdown 文件管�
 ### 规则 5: 存储而非填充
 长篇内容存入文件,上下文中只保留路径引用。
 
-### 规则 6: 🚨 知识沉淀
+### 规则 6: 知识沉淀
 
-> ⚠️ **核心原则: 检索 = 沉淀机会**。每次 read_file 后问自己：这个知识要存到哪?
+**Before 任何文件操作，先问：**
+- 检索了 → 沉淀了吗？(通用知识→`project.md`，临时信息→`notes.md`)
+- 创建 request.md → project.md 更新了吗？
 
-**强制时序:** 检索代码/文档后 → **立即**(在继续执行前)补充到相应文档 → 继续执行
+**沉淀去哪：**
+- 架构/API/模块知识 → `project.md`
+- 需求边界/确认细节 → `request.md`
+- 临时发现/调试信息 → `notes.md`
 
-**🔴 强制检查点:**
-- 检索 **3+ 文件**后,必须先更新 `project.md` 或 `notes.md` 再继续执行
-- 发现**新模块/新 API/新架构**时,必须立即记录到 `project.md`
-- 每完成一个 Todo 前,检查是否有未沉淀的知识
+**防膨胀：**
+- `project.md` 超过 300 行 → 迁移详细内容到 `docs/`
+- 单模块超过 50 行 → 拆分为独立文档 `docs/modules/xxx.md`
+- `project.md` 只保留索引和概要
 
-**📍 各阶段的沉淀要求:**
-| 阶段 | 检索目的 | 沉淀目标 |
-|------|----------|----------|
-| 任务启动 | 理解项目结构 | `project.md` |
-| 需求澄清 | 分析可行性 | `project.md` (技术知识) + `request.md` (需求细节) |
-| 任务执行 | 实现功能 | `project.md` (通用知识) 或 `notes.md` (临时信息) |
+**禁止：**
+- ❌ 检索后延后补充
+- ❌ 连续检索多个文件后直接编码
+- ❌ 把项目架构知识写入 request.md
 
-**补充目标:**
-- 通用知识(架构、API、模块关系、版本对比) → `project.md` 或 `docs/`
-- 需求相关(边界条件、确认细节) → `request.md`
-- 任务特定(临时发现、调试信息) → `notes.md`
-
-**禁止:** 检索后延后补充 ❌
-**禁止:** 连续检索多个文件后直接开始编码 ❌
-**禁止:** 把项目架构知识写入 request.md ❌
-
-### 规则 7: 上下文优化（Manus 4 原则）
+### 规则 7: 上下文优化（Manus 4 原则^[来源: Manus AI 最佳实践]）
 
 | 原则 | 实践 |
 |------|------|
@@ -323,7 +319,7 @@ description: FlowMem 上下文记忆系统。使用持久化 Markdown 文件管�
 
 ## 参考资源
 
-**模板:** `.flowmem/templates/project-mature.md`、`request.md`、`todolist.md`、`task_log.md`  
+**模板:** `.flowmem/templates/project-mature.md`、`.flowmem/templates/request.md`、`.flowmem/templates/todolist.md`、`.flowmem/templates/task_log.md`  
 **示例:** `.flowmem/examples/01-new-feature/`、`02-refactor/`、`03-debug/`  
 **工具:** `.flowmem/scripts/refresh-context.sh`、`archive-task.sh`
 

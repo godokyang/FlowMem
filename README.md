@@ -3,6 +3,29 @@
 > 🧠 **像 Manus 一样工作** — 使用持久化的 Markdown 文件作为 AI 的"磁盘上的工作记忆"
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![npm version](https://img.shields.io/npm/v/flowmem.svg)](https://www.npmjs.com/package/flowmem)
+
+---
+
+## 🆕 v2.0 重大更新
+
+### 新功能
+- **CLI 工具**: `npx flowmem init` 一键安装
+- **审核机制**: 10 个自动检查项，确保规则遵守
+- **规则精简**: 278 行 → 188 行（32% 精简）
+
+### 快速开始（v2）
+
+```bash
+# 一键安装到当前项目
+npx flowmem init
+
+# 指定适配器
+npx flowmem init --adapter cursor
+
+# 运行审核检查
+npx flowmem audit
+```
 
 ---
 
@@ -26,28 +49,116 @@
 
 ## 快速开始
 
-## 快速开始
-
-### 方式一：直接复制分发包 (推荐) ✅
-
-这是最简单、最符合 Agentic 理念的安装方式。你只需要复制一个文件夹，剩下的交给 AI。
-
-1. **下载分发包**：从 `dist/` 目录中选择适合你的编辑器（如 `dist/cursor`）。
-2. **复制到项目**：将文件夹内的内容（`.cursorrules` 和 `.flowmem/` 等）直接复制到你的项目根目录。
-3. **开始对话**：打开你的 AI 编辑器，新建一个对话。AI 会自动检测到规则，并提示你："我需要运行初始化脚本吗？"
-4. **AI 自动初始化**：AI 会自动运行 `.flowmem/scripts/setup.sh`，生成 `.agentmem/` 运行时目录。
-
-### 方式二：使用初始化脚本 (开发者模式)
-
-如果你是 FlowMem 的开发者，或者想从源码安装：
+### 方式一：使用 CLI 工具（v2，推荐）⭐
 
 ```bash
-# 克隆仓库
-git clone https://github.com/yourname/FlowMem.git
+# 一键安装到当前项目
+npx flowmem init
 
-# 在你的项目中初始化
-cd /path/to/your/project
-/path/to/FlowMem/scripts/init-agentmem.sh
+# 自动检测编辑器，或手动指定
+npx flowmem init --adapter cursor
+npx flowmem init --adapter claude-code
+
+# 查看帮助
+npx flowmem init --help
+```
+
+**支持的适配器**：cursor, claude-code, windsurf, copilot, cline, trae, gemini
+
+### 方式二：手动复制分发包
+
+1. 从 `adapters/` 目录选择适合你的编辑器（如 `adapters/cursor`）
+2. 复制文件到项目根目录（`.cursorrules` 和 `.flowmem/`）
+3. AI 会自动检测规则并初始化
+
+---
+
+## CLI 命令
+
+### `flowmem init`
+
+初始化 FlowMem 到当前项目
+
+```bash
+flowmem init [选项]
+
+选项:
+  -a, --adapter <name>   指定适配器（cursor|claude-code|windsurf等）
+  -f, --force            强制覆盖现有文件
+  -g, --global           全局安装到用户目录
+  --skip-agentmem        不创建 .agentmem/ 运行时目录
+  --with-mcp             启用 LLM 审核（实验性）
+```
+
+### `flowmem audit`
+
+运行审核检查，确保 AI 遵守工作流程规则
+
+```bash
+flowmem audit [检查项] [选项]
+
+选项:
+  --json                 输出 JSON 格式
+
+检查项（可选，不指定则运行全部）:
+  debt                   债务计数检查
+  sync                   request 同步检查
+  project                project 更新检查
+  size                   project 膨胀检查
+  request-size           request 膨胀检查
+  todo                   todolist 状态检查
+  active                 活动任务检测
+  confirmed              request 确认状态
+  archive                归档完整性检查
+  structure              结构完整性检查
+
+示例:
+  flowmem audit                    # 运行所有检查
+  flowmem audit debt               # 仅检查债务
+  flowmem audit --json             # JSON 输出
+```
+
+---
+
+## 本地开发与测试
+
+### npm link 测试步骤
+
+如果你想在本地测试 FlowMem 或贡献代码：
+
+```bash
+# 1. 克隆仓库
+git clone https://github.com/yourname/FlowMem.git
+cd FlowMem
+
+# 2. 安装依赖
+npm install
+
+# 3. 链接到全局（在 FlowMem 目录执行）
+npm link
+
+# 4. 在测试项目中使用
+cd /path/to/your/test/project
+flowmem init --adapter cursor
+
+# 5. 测试审核命令
+flowmem audit
+
+# 6. 测试完成后取消链接
+npm unlink -g flowmem
+```
+
+### 运行测试套件
+
+```bash
+# 运行所有测试
+npm test
+
+# 查看测试覆盖率
+npm test -- --coverage
+
+# 运行特定测试文件
+npm test -- detect-adapter.test.js
 ```
 
 ---
@@ -74,28 +185,19 @@ AI 自动生成的 `.agentmem/` 目录包含：
 └── history/               # 历史版本归档
 ```
 
-### 3. 配置你的 AI 工具
+### 3. 支持的 AI 编辑器
 
-运行初始化脚本时，它会自动为所有支持的 AI 工具（Claude, Cursor, Windsurf, Trae, Cline, Copilot, Gemini）生成配置文件。你只需直接使用适合你的工具即可。
+FlowMem v2 支持以下编辑器，使用 `flowmem init` 自动检测或手动指定：
 
-> **提示**：生成的配置文件（如 `.cursorrules`）已添加到 `.gitignore` 中，不会污染你的 Git 仓库。
-
-或者，若需手动配置，可复制 `adapters/common-rules.md`：
-
-| AI 工具 | 目标位置 |
-|--------|----------|
-| **Cursor** | 项目根目录 `.cursorrules` |
-| **Windsurf** | 项目根目录 `.windsurfrules` |
-| **Trae** | 项目根目录 `.trae/rules/context-memory.md` |
-| **Cline** | 项目根目录 `.clinerules` |
-| **Copilot** | 项目根目录 `.github/copilot-instructions.md` |
-| **Gemini** | `~/.gemini/` 或项目内文件 |
-
-> **Claude Code 用户**：
-> - Claude Code 采用 **Self-Contained（自包含）** 设计，所有模板都在 Skill 目录内
-> - **项目级安装**：复制 `dist/claude-code/.claude/` 到项目根目录
-> - **全局安装**：复制 `.claude/skills/context-memory-system/` 到 `~/.claude/skills/`
-> - 整个 Skill 目录是完整的，无论安装在哪里都能正常工作
+| 编辑器 | 适配器名称 | 自动检测标记 |
+|--------|------------|--------------|
+| **Cursor** | cursor | `.cursor` 或 `.cursorrules` |
+| **Claude Code** | claude-code | `.claude` |
+| **Windsurf** | windsurf | `.windsurf` 或 `.windsurfrules` |
+| **GitHub Copilot** | copilot | `.github/copilot-instructions.md` |
+| **Cline (Roo)** | cline | `.cline` 或 `.clinerules` |
+| **Trae** | trae | `.trae` |
+| **Gemini** | gemini | - |
 
 ---
 

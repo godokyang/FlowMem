@@ -14,15 +14,15 @@ set -e
 # 目录定义
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$SCRIPT_DIR/.."
-DIST_DIR="$ROOT_DIR/dist"
+ADAPTERS_DIR="$ROOT_DIR/adapters"
 TEMPLATE_FILE="$ROOT_DIR/adapters/common-rules.md"
 
-# 清理构建目录
-rm -rf "$DIST_DIR"
-mkdir -p "$DIST_DIR"
+# 清理构建目录（保留 common-rules.md）
+echo "清理旧的适配器包..."
+find "$ADAPTERS_DIR" -mindepth 1 -maxdepth 1 -type d -exec rm -rf {} +
 
 echo "构建 FlowMem 适配器包..."
-echo "目标目录: $DIST_DIR"
+echo "目标目录: $ADAPTERS_DIR"
 
 # 辅助函数：构建标准适配器包 (Cursor, Windsurf, Trae, Cline 等)
 # 参数: $1=适配器名称, $2=规则文件名, $3=静态资源目录名
@@ -31,7 +31,7 @@ build_standard_pack() {
     local rule_filename="$2"
     local assets_dir="$3" # e.g., ".flowmem" 或 ".cursor/flowmem"
     
-    local pack_dir="$DIST_DIR/$name"
+    local pack_dir="$ADAPTERS_DIR/$name"
     mkdir -p "$pack_dir"
     mkdir -p "$pack_dir/$assets_dir"
     
@@ -92,24 +92,24 @@ build_standard_pack "cline" ".clinerules" ".flowmem"
 # 注意: Trae 的规则文件在子目录，但 .flowmem 在根目录，路径依然有效
 # ============================================================================
 # 特殊处理 Trae 目录结构
-mkdir -p "$DIST_DIR/trae/.trae/rules"
+mkdir -p "$ADAPTERS_DIR/trae/.trae/rules"
 # 使用 build_standard_pack 生成到临时位置，然后移动
 build_standard_pack "trae-temp" "context-memory.md" ".flowmem"
-mv "$DIST_DIR/trae-temp/.flowmem" "$DIST_DIR/trae/"
-mv "$DIST_DIR/trae-temp/context-memory.md" "$DIST_DIR/trae/.trae/rules/"
-rm -rf "$DIST_DIR/trae-temp"
+mv "$ADAPTERS_DIR/trae-temp/.flowmem" "$ADAPTERS_DIR/trae/"
+mv "$ADAPTERS_DIR/trae-temp/context-memory.md" "$ADAPTERS_DIR/trae/.trae/rules/"
+rm -rf "$ADAPTERS_DIR/trae-temp"
 echo "  ✓ 调整 Trae 目录结构"
 
 # ============================================================================
 # 5. Copilot Adapter
 # 结构: Root/.github/copilot-instructions.md + Root/.flowmem/
 # ============================================================================
-mkdir -p "$DIST_DIR/copilot/.github"
+mkdir -p "$ADAPTERS_DIR/copilot/.github"
 # build_standard_pack 生成到临时位置
 build_standard_pack "copilot-temp" "copilot-instructions.md" ".flowmem"
-mv "$DIST_DIR/copilot-temp/.flowmem" "$DIST_DIR/copilot/"
-mv "$DIST_DIR/copilot-temp/copilot-instructions.md" "$DIST_DIR/copilot/.github/"
-rm -rf "$DIST_DIR/copilot-temp"
+mv "$ADAPTERS_DIR/copilot-temp/.flowmem" "$ADAPTERS_DIR/copilot/"
+mv "$ADAPTERS_DIR/copilot-temp/copilot-instructions.md" "$ADAPTERS_DIR/copilot/.github/"
+rm -rf "$ADAPTERS_DIR/copilot-temp"
 echo "  ✓ 调整 Copilot 目录结构"
 
 # ============================================================================
@@ -118,7 +118,7 @@ echo "  ✓ 调整 Copilot 目录结构"
 # 优势: 整个 Skill 目录可作为完整包，安装到项目级或全局级
 # ============================================================================
 echo "📦 构建 claude-code 包..."
-CLAUDE_PACK="$DIST_DIR/claude-code"
+CLAUDE_PACK="$ADAPTERS_DIR/claude-code"
 CLAUDE_SKILL_DIR=".claude/skills/context-memory-system"
 FULL_PATH="$CLAUDE_PACK/$CLAUDE_SKILL_DIR"
 
@@ -161,4 +161,4 @@ echo "  ✓ 生成 Skill: $CLAUDE_SKILL_DIR/SKILL.md (Self-Contained)"
 build_standard_pack "gemini" "gemini-rules.md" ".flowmem"
 
 echo ""
-echo "🎉构建完成！请查看 dist/ 目录。"
+echo "🎉构建完成！请查看 adapters/ 目录。"

@@ -1,3 +1,8 @@
+---
+name: context-memory-system
+description: FlowMem 上下文记忆系统。使用持久化 Markdown 文件管理 AI 工作记忆，在开始复杂任务、多文件修改时自动激活。
+---
+
 # 上下文记忆系统规则
 
 > 🛑 **三秒检查 (每次行动前):**

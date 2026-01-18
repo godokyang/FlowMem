@@ -1,6 +1,6 @@
 {
   "name": "flowmem",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "上下文记忆系统 - AI 编辑器持久化工作记忆管理",
   "main": "src/index.js",
   "bin": {
@@ -34,7 +34,9 @@
   "dependencies": {
     "chalk": "^4.1.2",
     "commander": "^11.0.0",
-    "fs-extra": "^11.2.0"
+    "fs-extra": "^11.2.0",
+    "inquirer": "^8.2.6",
+    "js-yaml": "^4.1.0"
   },
   "devDependencies": {
     "jest": "^29.7.0"

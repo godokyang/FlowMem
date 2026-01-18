@@ -139,6 +139,7 @@ DEST_FILE="$FULL_PATH/SKILL.md"
 echo "---" > "$DEST_FILE"
 echo "name: context-memory-system" >> "$DEST_FILE"
 echo "description: FlowMem 上下文记忆系统。使用持久化 Markdown 文件管理 AI 工作记忆，在开始复杂任务、多文件修改时自动激活。" >> "$DEST_FILE"
+echo "autorun: true" >> "$DEST_FILE"
 echo "---" >> "$DEST_FILE"
 echo "" >> "$DEST_FILE"
 

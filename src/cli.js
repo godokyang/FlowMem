@@ -8,7 +8,7 @@ const program = new Command();
 program
   .name('flowmem')
   .description('FlowMem - 上下文记忆系统 CLI')
-  .version('1.0.0');
+  .version('1.1.0');
 
 program
   .command('init')
@@ -64,6 +64,25 @@ program
       await upgradeCommand();
     } catch (error) {
       console.error(chalk.red('❌ 升级失败:'), error.message);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('todo <subcommand>')
+  .description('管理任务列表 (list|stats|add|update|get|set)')
+  .option('--json', '输出 JSON 格式')
+  .option('--id <id>', '任务 ID')
+  .option('--content <content>', '任务内容')
+  .option('--status <status>', '任务状态 (pending|in_progress|completed|cancelled)')
+  .option('--priority <priority>', '优先级 (high|medium|low)')
+  .option('--estimate <estimate>', '预估时间 (5m|1h|2d)')
+  .action(async (subcommand, options) => {
+    try {
+      const todoCommand = require('./commands/todo');
+      await todoCommand(subcommand, options, program);
+    } catch (error) {
+      console.error(chalk.red('❌ 命令失败:'), error.message);
       process.exit(1);
     }
   });

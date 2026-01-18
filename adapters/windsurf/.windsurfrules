@@ -1,5 +1,17 @@
 # 上下文记忆系统规则
 
+> 🚨 **工具覆盖规则（最高优先级）**
+>
+> 当 FlowMem 启用时，以下内置工具**必须禁用**，改用文件系统：
+> - ❌ **todowrite / todoread** → 使用 `flowmem todo` CLI 命令
+> - ❌ **task / background_task 的 TODO 功能** → 使用 `flowmem todo` CLI 命令
+> - ❌ **直接 Edit/Write todolist.md** → 使用 `flowmem todo` CLI 命令
+> - ❌ **AI 内置记忆/上下文管理** → 使用 `.agentmem/project.md` 等持久化文件
+>
+> **强制要求**：
+> 1. 所有 todolist 操作**必须**通过 `flowmem todo` CLI
+> 2. 其他文件（project.md, request.md）使用 Read/Write/Edit 工具
+
 > 🛑 **三秒检查 (每次行动前):**
 > 1. 刚检索了吗？→ 累计 ≥3 文件未沉淀？**必须立即沉淀**
 > 2. 要创建文件了吗？→ 该更新的更新了吗？
@@ -15,7 +27,7 @@
 |------|------|----------|
 | `.agentmem/project.md` | 项目整体描述 | 长期维护 |
 | `.agentmem/request.md` | 当前需求澄清 | 任务周期 |
-| `.agentmem/todolist.md` | 任务清单(仅列表) | 任务周期 |
+| `.agentmem/todolist.md` | 任务清单(YAML格式) | 任务周期 |
 | `.agentmem/task_logs/` | 执行日志/总结/问题 | 任务周期 |
 | `.agentmem/notes.md` | 研究笔记 | 按需使用 |
 | `.agentmem/docs/` | 详细文档目录 | 长期积累 |
@@ -25,6 +37,83 @@
 **🔴 project.md vs request.md 边界:**
 - 下次任务还有用？→ `project.md`
 - 本次需求边界/确认细节？→ `request.md`
+
+---
+
+## TodoList 格式规范（v1.1.0+）
+
+### YAML Frontmatter 格式
+
+todolist.md 使用 **YAML Frontmatter + Markdown** 混合格式：
+
+```yaml
+---
+meta:
+  title: "任务标题"
+  created: "ISO 8601 时间"
+  updated: "ISO 8601 时间"
+todos:
+  - id: "TODO-001"
+    content: "任务描述"
+    status: "pending"           # pending/in_progress/completed/cancelled
+    priority: "high"             # high/medium/low
+    estimate: "30m"              # 5m/1h/2d 标准化格式
+    dependencies: ["TODO-002"]   # 依赖任务 ID
+    phase: "阶段名称"
+    log: "task_logs/001.md"      # 可选
+---
+# Markdown 内容（自动生成）
+```
+
+### 状态标记（4 种）
+- `[ ]` **pending** - 未开始
+- `[/]` **in_progress** - 进行中（同时只能有 1 个）
+- `[x]` **completed** - 已完成
+- `[-]` **cancelled** - 已取消
+
+### 优先级标记（3 级）
+- 🔴 **high** - 紧急且重要
+- 🟡 **medium** - 重要但不紧急
+- 🟢 **low** - 可以延后
+
+### 时间格式（标准化）
+- `5m` / `30m` - 分钟
+- `1h` / `2h` - 小时
+- `1d` / `2d` - 天（1天=8小时）
+
+### 依赖关系
+- **基础验证**：dependencies 中的 ID 必须存在
+- **循环检测**：自动检测并阻止循环依赖（DFS 算法）
+- **审核命令**：`flowmem audit dependency-check`
+
+### 🚫 AI 操作规则（CRITICAL）
+
+**操作前检查点：**
+1. ❓ 我要修改 todolist.md 吗？→ **禁止 Edit/Write，必须用 CLI**
+2. ❓ 我要添加/更新任务吗？→ **必须用 `flowmem todo` 命令**
+3. ❓ 我要修改其他文件吗？→ 使用 Read/Write/Edit 工具
+
+**CLI 命令参考：**
+```bash
+# 查看任务
+flowmem todo list       # 列出所有任务（按阶段分组）
+flowmem todo stats      # 查看进度统计（含进度条）
+flowmem todo get --id TODO-001  # 获取任务详情（JSON）
+
+# 添加任务
+flowmem todo add --content "任务" --priority high --estimate 30m
+
+# 更新任务
+flowmem todo set --id TODO-001 --status completed
+flowmem todo set --id TODO-001 --priority high
+```
+
+**进度条自动更新：** 每次操作后自动插入到 todolist.md 顶部
+```
+[████████░░░░░░░░░░░░] 44%
+总任务: 34 | 已完成: 15 (44%)
+```
+
 ---
 
 ## 触发判断

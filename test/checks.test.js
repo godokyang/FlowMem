@@ -49,14 +49,42 @@ describe('checks', () => {
 
   describe('checkTodo', () => {
     test('正确统计 todo 状态', async () => {
-      const content = `
-# Todolist
-- [ ] Task 1
-- [x] Task 2
-- [/] Task 3
-- [ ] Task 4
-- [x] Task 5
-`;
+      const content = `---
+meta:
+  title: "Test"
+todos:
+  - id: "TODO-001"
+    content: "Task 1"
+    status: "pending"
+    priority: "high"
+    estimate: "30m"
+    dependencies: []
+  - id: "TODO-002"
+    content: "Task 2"
+    status: "completed"
+    priority: "high"
+    estimate: "30m"
+    dependencies: []
+  - id: "TODO-003"
+    content: "Task 3"
+    status: "in_progress"
+    priority: "high"
+    estimate: "30m"
+    dependencies: []
+  - id: "TODO-004"
+    content: "Task 4"
+    status: "pending"
+    priority: "high"
+    estimate: "30m"
+    dependencies: []
+  - id: "TODO-005"
+    content: "Task 5"
+    status: "completed"
+    priority: "high"
+    estimate: "30m"
+    dependencies: []
+---
+# Content`;
       await fs.writeFile(path.join(testDir, '.agentmem', 'todolist.md'), content);
       const result = await runCheck('todo', testDir);
       expect(result.pass).toBe(true);
@@ -92,7 +120,7 @@ describe('checks', () => {
       await fs.writeFile(path.join(testDir, '.agentmem', 'project.md'), 'test');
       const results = await runAllChecks(testDir);
       
-      expect(Object.keys(results)).toHaveLength(10);
+      expect(Object.keys(results)).toHaveLength(12);
       expect(results).toHaveProperty('debt');
       expect(results).toHaveProperty('structure');
       expect(results).toHaveProperty('size');

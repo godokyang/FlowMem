@@ -1,5 +1,6 @@
 const path = require('path');
 const fs = require('fs-extra');
+const { parseTodoList, calculateStats, validateDependencies, detectCircularDependencies, validateTimeFormat } = require('./todo-parser');
 
 const CHECKS = {
   debt: checkDebt,
@@ -11,7 +12,9 @@ const CHECKS = {
   active: checkActive,
   confirmed: checkConfirmed,
   archive: checkArchive,
-  structure: checkStructure
+  structure: checkStructure,
+  'dependency-check': checkDependencies,
+  'time-format': checkTimeFormat
 };
 
 async function checkDebt(projectRoot) {
@@ -124,18 +127,28 @@ async function checkTodo(projectRoot) {
     };
   }
   
-  const content = await fs.readFile(todoFile, 'utf-8');
-  
-  const total = (content.match(/- \[[ x\/]\]/g) || []).length;
-  const completed = (content.match(/- \[x\]/g) || []).length;
-  const inProgress = (content.match(/- \[\/\]/g) || []).length;
-  const pending = total - completed - inProgress;
-  
-  return {
-    pass: true,
-    message: `todolist: ${completed}/${total} 完成`,
-    details: { total, completed, inProgress, pending }
-  };
+  try {
+    const { todos, format } = parseTodoList(todoFile);
+    const stats = calculateStats(todos);
+    
+    return {
+      pass: true,
+      message: `todolist: ${stats.completed}/${stats.total} 完成 (格式: ${format})`,
+      details: {
+        ...stats,
+        format,
+        hasPriority: todos.some(t => t.priority && t.priority !== 'medium'),
+        hasDependencies: todos.some(t => t.dependencies && t.dependencies.length > 0),
+        hasEstimate: todos.some(t => t.estimate)
+      }
+    };
+  } catch (err) {
+    return {
+      pass: false,
+      message: `todolist 解析失败: ${err.message}`,
+      details: { error: err.message }
+    };
+  }
 }
 
 async function checkActive(projectRoot) {
@@ -228,6 +241,128 @@ async function checkStructure(projectRoot) {
     message: '结构完整性检查通过',
     details: null
   };
+}
+
+async function checkDependencies(projectRoot) {
+  const todoFile = path.join(projectRoot, '.agentmem', 'todolist.md');
+  
+  if (!fs.existsSync(todoFile)) {
+    return {
+      pass: true,
+      message: '无 todolist.md',
+      details: null
+    };
+  }
+  
+  try {
+    const { todos, format } = parseTodoList(todoFile);
+    
+    if (format === 'legacy') {
+      return {
+        pass: true,
+        message: '传统格式无依赖关系',
+        details: { format: 'legacy' }
+      };
+    }
+    
+    const basicValidation = validateDependencies(todos);
+    const circularCheck = detectCircularDependencies(todos);
+    
+    if (!basicValidation.valid) {
+      return {
+        pass: false,
+        message: `依赖验证失败: ${basicValidation.errors.length} 个错误`,
+        details: {
+          errors: basicValidation.errors,
+          cycles: circularCheck.cycles
+        }
+      };
+    }
+    
+    if (circularCheck.hasCircular) {
+      return {
+        pass: false,
+        message: `检测到循环依赖: ${circularCheck.cycles.length} 个环`,
+        details: {
+          cycles: circularCheck.cycles
+        }
+      };
+    }
+    
+    return {
+      pass: true,
+      message: '依赖关系检查通过',
+      details: {
+        totalDependencies: todos.reduce((sum, t) => sum + (t.dependencies?.length || 0), 0)
+      }
+    };
+  } catch (err) {
+    return {
+      pass: false,
+      message: `依赖检查失败: ${err.message}`,
+      details: { error: err.message }
+    };
+  }
+}
+
+async function checkTimeFormat(projectRoot) {
+  const todoFile = path.join(projectRoot, '.agentmem', 'todolist.md');
+  
+  if (!fs.existsSync(todoFile)) {
+    return {
+      pass: true,
+      message: '无 todolist.md',
+      details: null
+    };
+  }
+  
+  try {
+    const { todos, format } = parseTodoList(todoFile);
+    
+    if (format === 'legacy') {
+      return {
+        pass: true,
+        message: '传统格式无时间预估',
+        details: { format: 'legacy' }
+      };
+    }
+    
+    const invalidTimes = [];
+    
+    todos.forEach(todo => {
+      if (todo.estimate && !validateTimeFormat(todo.estimate)) {
+        invalidTimes.push({
+          id: todo.id,
+          estimate: todo.estimate
+        });
+      }
+    });
+    
+    if (invalidTimes.length > 0) {
+      return {
+        pass: false,
+        message: `时间格式错误: ${invalidTimes.length} 个任务`,
+        details: {
+          invalidTimes,
+          validFormat: '5m, 1h, 2d'
+        }
+      };
+    }
+    
+    return {
+      pass: true,
+      message: '时间格式检查通过',
+      details: {
+        totalWithEstimate: todos.filter(t => t.estimate).length
+      }
+    };
+  } catch (err) {
+    return {
+      pass: false,
+      message: `时间格式检查失败: ${err.message}`,
+      details: { error: err.message }
+    };
+  }
 }
 
 async function runCheck(checkName, projectRoot) {

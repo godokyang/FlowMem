@@ -1,6 +1,8 @@
-# ctx-engine 设计文档（Design Doc）
+# ccq-engine 设计文档（Design Doc）
 
 > 目标：复刻类似 Augment Context Services 的"上下文检索"能力：对本地单仓库进行索引，提供高质量语义检索（Embeddings）+ 关键词检索（BM25）的混合召回，并输出可直接给 LLM 使用的上下文；同时通过 MCP 将检索能力暴露成工具，供 Claude Desktop 与 GitHub Copilot（VS Code）调用。
+>
+> **v2 更新**：支持 25+ 编程语言、混合模式（project.md + 按需检索）、状态持久化。
 
 ---
 
@@ -8,7 +10,7 @@
 
 ### 1.1 背景
 
-在大中型 TS/JS 代码库里，仅靠 grep/关键词匹配难以稳定找到"正确的实现路径"；而纯向量语义检索对符号名、错误码、配置键等"精确词"召回不稳定。一个实用的工程化方案是 **Hybrid Retrieval（BM25 + 向量）**，并通过 **RRF** 这种按排名融合的方式稳定合并两路结果。
+在大中型代码库里，仅靠 grep/关键词匹配难以稳定找到"正确的实现路径"；而纯向量语义检索对符号名、错误码、配置键等"精确词"召回不稳定。一个实用的工程化方案是 **Hybrid Retrieval（BM25 + 向量）**，并通过 **RRF** 这种按排名融合的方式稳定合并两路结果。
 
 此外，想把检索能力无缝接入 Claude、Copilot 这类工具，MCP（Model Context Protocol）提供了统一的"工具/资源"接入标准：Host（IDE/聊天应用）通过 MCP Client 连接 MCP Server，发现工具（tools/list）并调用工具（tools/call）。
 
@@ -20,7 +22,7 @@
 - **同步延迟**：代码变了但 project.md 没更新
 - **信息膨胀**：大项目 project.md 会膨胀（300 行限制仍浪费 tokens）
 
-**ctx-engine 的定位**：
+**ccq-engine 的定位**：
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                    FlowMem 工作流                               │
@@ -31,7 +33,7 @@
 ├─────────────────────────────────────────────────────────────────┤
 │  project.md      项目知识库               ⬇️ 自动化替代          │
 │                                          ⬇️                      │
-│  ctx-engine      代码语义检索             按需检索（新增）       │
+│  ccq-engine      代码语义检索             按需检索（新增）       │
 │                  + 自动索引                                      │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -56,14 +58,75 @@
 - 不做多仓库/跨服务全局索引（后续可扩展）。
 - 不追求在 >10 万 chunks 规模下的极致性能（A 档规模优先）。
 
+### 1.5 项目架构（Lerna Monorepo）
+
+整个项目使用 **Lerna** 管理 monorepo，分为两个核心包：
+
+```
+flowmem/
+├── lerna.json
+├── package.json
+├── packages/
+│   ├── ccq-workflow/        # 工作流相关（原 flowmem 功能）
+│   │   ├── src/
+│   │   │   ├── cli/         # flowmem init/todo/audit 命令
+│   │   │   ├── adapters/    # 编辑器适配器
+│   │   │   ├── templates/   # Markdown 模板
+│   │   │   └── rules/       # 规则校验
+│   │   └── package.json     # @ccq/workflow
+│   │
+│   └── ccq-engine/          # AI 检索引擎（本设计文档）
+│       ├── src/
+│       │   ├── cli/         # ccq index/context/ask/mcp 命令
+│       │   ├── indexer/     # 索引器（Scanner, Chunker）
+│       │   ├── embeddings/  # Embeddings Provider
+│       │   ├── retrieval/   # 检索器（BM25, Vector, RRF）
+│       │   ├── mcp/         # MCP Server
+│       │   └── storage/     # SQLite 存储
+│       └── package.json     # @ccq/engine
+│
+└── docs/
+    └── v2/
+        └── contextDesign.md  # 本文档
+```
+
+**包职责划分**：
+
+| 包 | 职责 | CLI 命令 |
+|----|------|----------|
+| **@ccq/workflow** | 任务流程管理、需求澄清、进度跟踪 | `flowmem init/todo/audit` |
+| **@ccq/engine** | 代码语义索引、混合检索、MCP 服务 | `ccq index/context/ask/mcp` |
+
+**包依赖关系**：
+
+```
+@ccq/workflow
+    │
+    └──▶ @ccq/engine（可选依赖，用于 codebase_retrieval）
+```
+
+**发布策略**：
+- 独立版本：两个包独立发布、独立版本号
+- 用户可单独安装 `@ccq/engine` 用于纯检索场景
+- 安装 `@ccq/workflow` 时自动安装 `@ccq/engine`
+
 ---
 
 ## 2. 范围与约束
 
 ### 2.1 适用范围
 
-- 语言栈：TS/JS 为主，兼容 JSON/MD/YAML 等文本。
-- 仓库规模：A 档（< 3k chunks）优先，向量检索采用 brute-force cosine（简单稳定）。
+- **语言栈**：通过 tree-sitter 支持 25+ 编程语言
+
+| 优先级 | 语言 | AST 支持 | 说明 |
+|--------|------|----------|------|
+| **Tier 1** | TypeScript, JavaScript, Python, Go, Rust, Java | ✅ 完整 | 函数/类/模块边界切分 |
+| **Tier 2** | C, C++, C#, Ruby, PHP, Kotlin, Swift | ✅ 完整 | 按需加载 parser |
+| **Tier 3** | Bash, SQL, Scala, Lua, Haskell, OCaml | ✅ 基础 | 社区 parser |
+| **文本类** | Markdown, JSON, YAML, TOML, XML, HTML, CSS | ✅ 结构化 | 标题/键值/选择器切分 |
+| **Fallback** | 其他文本文件 | ⚠️ 字符切分 | maxChars + overlap |
+
+- **仓库规模**：A 档（< 3k chunks）优先，B 档（3k-30k chunks）支持，向量检索采用 brute-force cosine（简单稳定）。
 
 ### 2.2 约束
 
@@ -79,7 +142,7 @@
 ```
           ┌────────────────────────────┐
           │            CLI             │
-          │  ctx index/context/ask     │
+          │  ccq index/context/ask     │
           └───────────┬────────────────┘
                       │
                       │ uses
@@ -129,23 +192,37 @@
 - 目标：避免索引非源码大目录、构建产物、缓存、二进制。
 - `.augmentignore` 推荐模板见 README（本设计文档不重复）。
 
-### 4.2 Chunk 策略（混合方案）
+### 4.2 Chunk 策略（通用多语言）
 
 **V1：AST 优先 + 字符 Fallback**
 
-| 文件类型 | 切分策略 | 边界 |
-|----------|----------|------|
-| `.ts/.tsx/.js/.jsx` | tree-sitter AST | 函数/类/导出块 |
-| `.md` | Heading 分段 | `## / ###` 标题 |
-| `.json/.yaml` | 顶层 key 分块 | 对象/数组边界 |
-| 其他文本 | 字符切分 | maxChars + overlap |
+| 语言类别 | 切分策略 | 边界单元 |
+|----------|----------|----------|
+| **Tier 1-3 编程语言** | tree-sitter AST | 函数/类/方法/顶层声明 |
+| **Markdown** | Heading 分段 | `## / ###` 标题 |
+| **JSON/YAML/TOML** | 顶层 key 分块 | 对象/数组边界 |
+| **HTML/CSS** | 结构化切分 | 标签/选择器边界 |
+| **其他文本** | 字符切分 | maxChars + overlap |
 
-**AST 切分规则（TS/JS）**：
-- 每个**顶层函数声明**为独立 chunk
-- 每个**导出块（export）**为独立 chunk
-- 每个**类定义**为独立 chunk（含方法）
-- **import 语句**合并为单独 chunk
-- 超长函数（>2000 chars）做二次切分
+**AST 切分通用规则**：
+- 每个**顶层函数/方法声明**为独立 chunk
+- 每个**类/结构体/接口定义**为独立 chunk（含方法）
+- 每个**模块导出/公开声明**为独立 chunk
+- **import/include/use 语句**合并为单独 chunk
+- 超长定义（>2000 chars）做二次切分
+
+**语言特定边界**：
+
+| 语言 | 主要边界节点 |
+|------|-------------|
+| TypeScript/JavaScript | `function_declaration`, `class_declaration`, `export_statement` |
+| Python | `function_definition`, `class_definition`, `decorated_definition` |
+| Go | `function_declaration`, `method_declaration`, `type_declaration` |
+| Rust | `function_item`, `impl_item`, `struct_item`, `enum_item`, `mod_item` |
+| Java | `class_declaration`, `method_declaration`, `interface_declaration` |
+| C/C++ | `function_definition`, `struct_specifier`, `class_specifier` |
+| Ruby | `method`, `class`, `module` |
+| PHP | `function_definition`, `class_declaration`, `method_declaration` |
 
 **Markdown 切分规则**：
 - 以 `##` 或 `###` 为分割点
@@ -285,8 +362,8 @@ CREATE INDEX idx_files_hash ON files(hash);
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │  手动触发（V1）                                               │
-│  - ctx index              全量扫描，增量更新                  │
-│  - ctx index --watch      watch 模式（后台监听文件变化）      │
+│  - ccq index              全量扫描，增量更新                  │
+│  - ccq index --watch      watch 模式（后台监听文件变化）      │
 ├──────────────────────────────────────────────────────────────┤
 │  自动触发（V2 可选）                                          │
 │  - Git Hook               commit/checkout 时触发              │
@@ -295,8 +372,8 @@ CREATE INDEX idx_files_hash ON files(hash);
 ```
 
 **V1 策略（手动 + watch）**：
-- 默认：用户执行 `ctx index` 手动触发
-- Watch 模式：`ctx index --watch` 监听文件变化，防抖 3s 后自动索引
+- 默认：用户执行 `ccq index` 手动触发
+- Watch 模式：`ccq index --watch` 监听文件变化，防抖 3s 后自动索引
 
 **防抖机制**：
 - 连续修改同一文件，3s 内只触发 1 次索引
@@ -352,7 +429,7 @@ CREATE INDEX idx_files_hash ON files(hash);
 ```
 
 **清理策略**：
-- 每次 `ctx index` 结束后自动清理
+- 每次 `ccq index` 结束后自动清理
 - 删除操作使用事务（避免部分删除）
 
 #### 5.2.5 并发与一致性
@@ -367,7 +444,7 @@ CREATE INDEX idx_files_hash ON files(hash);
 |------|------|
 | 索引中修改文件 | 下次索引重新扫描（基于 hash 判断） |
 | 索引失败 | SQLite 事务回滚 + 标记状态为 "indexing_failed" |
-| 多进程并发 | 使用文件锁（.ctx/.lock）防止并发索引 |
+| 多进程并发 | 使用文件锁（.ccq/.lock）防止并发索引 |
 
 **事务边界**：
 - 单文件索引为一个事务（失败不影响其他文件）
@@ -392,7 +469,7 @@ CREATE INDEX idx_files_hash ON files(hash);
 ```bash
 # .git/hooks/post-checkout
 #!/bin/bash
-ctx index --async &
+ccq index --async &
 ```
 
 - checkout 后台触发索引
@@ -427,7 +504,7 @@ ready → indexing → ready
 **用户可见状态**：
 
 ```bash
-$ ctx status
+$ ccq status
 Status: ✅ Ready
 Last indexed: 2 minutes ago
 Branch: main (abc123)
@@ -442,22 +519,22 @@ Files: 234 | Chunks: 2,847 | Size: 45.2 MB
 
 ```bash
 # 索引（增量）
-ctx index [--full]              # --full 强制全量重建
+ccq index [--full]              # --full 强制全量重建
 
 # 检索上下文
-ctx context <query> [options]
+ccq context <query> [options]
   --topK N                      # 返回 top N chunks（默认 10）
   --maxChars M                  # 最大字符数限制（默认 8000）
   --format json|text            # 输出格式（默认 text）
 
 # 问答（需在线 LLM）
-ctx ask <question>              # 先检索再调用在线 LLM
+ccq ask <question>              # 先检索再调用在线 LLM
 
 # 启动 MCP Server
-ctx mcp                         # stdio 模式
+ccq mcp                         # stdio 模式
 
 # 索引状态
-ctx status                      # 查看索引统计
+ccq status                      # 查看索引统计
 ```
 
 ### 6.2 MCP 工具
@@ -488,6 +565,107 @@ codebase_status() -> {
 设计选择：
 - 只暴露只读工具（不会对文件系统写入）。
 - 输出为 text content，便于各类 host 直接注入到模型上下文。
+
+### 6.3 高级检索能力（V1.5+）
+
+#### 6.3.1 searchAndAsk 模式
+
+类似 Augment 的 `searchAndAsk()`，提供一站式问答：
+
+```bash
+# 基础检索（返回 chunks）
+ccq context "用户认证流程"
+
+# 问答模式（检索 + LLM 回答）
+ccq ask "如何修改登录逻辑？"
+
+# 自定义 prompt
+ccq ask "用户认证流程" --prompt "请做代码审查，关注安全最佳实践"
+```
+
+**MCP 工具扩展**：
+
+```typescript
+// 问答模式（需在线 LLM）
+codebase_ask({
+  query: string,
+  prompt?: string,       // 自定义 system prompt
+  model?: string,        // 可选模型（默认配置文件指定）
+  maxChars?: number      // 默认 8000
+}) -> text
+```
+
+#### 6.3.2 状态持久化
+
+支持导出/导入索引状态（类似 Augment SDK），避免重复 embedding 计算：
+
+```bash
+# 导出当前索引状态
+ccq export ./backup/ccq-state.json
+
+# 导入索引状态（避免重新 embedding）
+ccq import ./backup/ccq-state.json
+
+# 检查状态文件有效性
+ccq import --dry-run ./backup/ccq-state.json
+```
+
+**应用场景**：
+
+| 场景 | 命令 |
+|------|------|
+| **CI/CD 缓存** | `ccq export` + 缓存 `.ccq/` 目录 |
+| **团队共享索引** | 导出后上传到共享存储 |
+| **机器迁移** | 导出后在新机器导入 |
+
+**GitHub Actions 示例**：
+
+```yaml
+# .github/workflows/ci.yml
+- uses: actions/cache@v3
+  with:
+    path: .ccq/
+    key: ccq-${{ hashFiles('**/*.ts', '**/*.py', '**/*.go') }}
+    
+- run: |
+    if [ -f .ccq/index.db ]; then
+      ccq status  # 使用缓存
+    else
+      ccq index   # 首次索引
+    fi
+```
+
+#### 6.3.3 Direct Context 模式（V2）
+
+索引任意来源的文件（不限于本地磁盘），支持远程仓库、API 文档等：
+
+```typescript
+// SDK 模式
+const ccq = new DirectContext();
+
+// 索引远程 GitHub 仓库
+await ccq.addToIndex([
+  { path: 'lib/auth.ts', content: await fetchFromGitHub('owner/repo', 'lib/auth.ts') }
+]);
+
+// 索引 API 文档
+await ccq.addToIndex([
+  { path: 'docs/api.md', content: await fetchDocs('https://api.example.com/docs') }
+]);
+
+// 检索
+const results = await ccq.search('authentication');
+```
+
+**CLI 支持**：
+
+```bash
+# 从 URL 添加文件
+ccq add-remote https://raw.githubusercontent.com/owner/repo/main/README.md
+
+# 从 stdin 添加
+cat api-docs.md | ccq add-stdin --path docs/api.md
+```
 
 ---
 
@@ -591,7 +769,7 @@ project.md 从"必须维护"变为"可选高层摘要"：
 - 数据库: PostgreSQL
 
 ## 🔗 代码检索
-项目代码通过 ctx-engine 自动索引，AI 可直接调用 codebase_retrieval 检索。
+项目代码通过 ccq-engine 自动索引，AI 可直接调用 codebase_retrieval 检索。
 无需手动维护模块文档。
 
 ## ⚠️ 必读注意事项（人工维护）
@@ -633,6 +811,103 @@ AI 操作:
 ```
 ```
 
+### 7.5 project.md vs 按需检索：如何选择？
+
+ccq-engine **不是要取消 project.md**，而是提供**混合模式**，让用户按需选择。
+
+#### 7.5.1 两种模式对比
+
+| 维度 | project.md（手动知识文件） | 按需检索（ccq-engine） |
+|------|---------------------------|------------------------|
+| **维护方式** | 人工维护 | 自动索引 |
+| **知识类型** | 隐性知识（约定、坑点、决策） | 显性知识（代码结构） |
+| **更新频率** | 依赖人工触发 | 随代码自动更新 |
+| **上下文消耗** | 全量加载（300 行限制） | 按需检索（topK chunks） |
+| **适用规模** | 小项目（<50 文件） | 任意规模 |
+| **离线能力** | ✅ 完全离线 | ⚠️ 在线 embedding 可选 |
+| **可控性** | ✅ 完全控制 | ⚠️ "黑盒"检索 |
+| **跨工具兼容** | ⚠️ 仅 FlowMem | ✅ MCP 标准 |
+
+#### 7.5.2 业界最佳实践
+
+参考 OWASP Juice Shop、Sentry、Coolify 等 60k+ 开源项目的做法：
+
+**推荐架构：混合模式**
+
+```
+.agentmem/
+├── project.md          # 人工维护：高层摘要 + 隐性知识（~50 行）
+└── ...
+
+.ccq/
+├── index.db            # 自动索引：代码语义
+└── config.yaml         # 检索配置
+
+# 可选：跨工具通用指令
+AGENTS.md               # 跨 AI 工具的通用标准（Cursor/Claude/Copilot）
+```
+
+**AGENTS.md 标准**（Linux Foundation Agentic AI Foundation 推荐）：
+- 跨 20+ AI 编码工具兼容
+- 简单 Markdown 格式
+- 60k+ 项目采用
+- 参考：https://agents.md
+
+#### 7.5.3 project.md 瘦身模板
+
+```markdown
+# [项目名称]
+
+## 一句话描述
+[这个项目是什么、为谁解决什么问题]
+
+## 技术栈
+- 语言: TypeScript / Python / Go
+- 框架: Next.js / FastAPI / Gin
+- 数据库: PostgreSQL
+
+## ⚠️ 必读注意事项（人工维护）
+- [关键坑点 1：需要人工标注的特殊约定]
+- [关键坑点 2：不在代码里但很重要的信息]
+- [架构决策：为什么选择 X 而非 Y]
+
+## 🔗 代码检索
+代码细节通过 ccq-engine 自动索引，使用 `ccq context "关键词"` 按需检索。
+```
+
+#### 7.5.4 何时选择哪种模式？
+
+| 场景 | 推荐模式 | 说明 |
+|------|----------|------|
+| 小项目（<50 文件） | 仅 project.md | 无需 ccq-engine 复杂度 |
+| 隐性知识多（架构决策、历史坑） | project.md + ccq-engine | 混合模式 |
+| 纯代码项目（隐性知识少） | 仅 ccq-engine | 全自动 |
+| 团队协作（多 AI 工具） | AGENTS.md + ccq-engine | 跨工具兼容 |
+| 开源项目 | AGENTS.md | 最大化贡献者兼容性 |
+
+#### 7.5.5 配置选项
+
+```yaml
+# .ccq/config.yaml
+mode: hybrid  # full_auto | hybrid | manual_only
+
+# hybrid 模式下：
+hybrid:
+  project_md:
+    enabled: true
+    path: .agentmem/project.md
+    max_lines: 50          # 限制 project.md 行数
+    auto_include: true     # 检索结果自动包含 project.md
+  agents_md:
+    enabled: false         # 可选：启用 AGENTS.md 跨工具兼容
+
+# 纯自动模式（无 project.md）：
+# mode: full_auto
+
+# 纯手动模式（无检索，仅 project.md）：
+# mode: manual_only
+```
+
 ---
 
 ## 8. Claude Desktop 集成
@@ -644,9 +919,9 @@ Claude Desktop 支持本地 MCP server（stdio）并可通过配置文件注册�
 ```json
 {
   "mcpServers": {
-    "ctx-engine": {
+    "ccq-engine": {
       "command": "npx",
-      "args": ["ctx-engine", "mcp"],
+      "args": ["ccq-engine", "mcp"],
       "env": {
         "CTX_ROOT": "/path/to/project"
       }
@@ -668,9 +943,9 @@ VS Code 的 Copilot Chat 支持通过 MCP servers 扩展工具与上下文来源
 ```json
 {
   "servers": {
-    "ctx-engine": {
+    "ccq-engine": {
       "command": "npx",
-      "args": ["ctx-engine", "mcp"]
+      "args": ["ccq-engine", "mcp"]
     }
   }
 }
@@ -703,7 +978,82 @@ VS Code 的 Copilot Chat 支持通过 MCP servers 扩展工具与上下文来源
 
 - 索引文件：单文件 <1MB（跳过大文件）
 - 内存占用：索引过程 <500MB
-- 磁盘占用：.ctx/ 目录 <100MB（3k chunks 规模）
+- 磁盘占用：.ccq/ 目录 <100MB（3k chunks 规模）
+
+### 11.3 存储体积评估
+
+基于典型项目规模，评估索引数据库的存储占用：
+
+#### 11.3.1 存储模型
+
+```
+总存储 = Chunks 表 + Vectors 表 + Files 表 + BM25 索引 + SQLite 开销
+```
+
+**各部分存储估算**：
+
+| 组件 | 单条大小 | 说明 |
+|------|----------|------|
+| **Chunks 表** | ~1.5KB/chunk | text(~1200 chars) + 元数据(~300 bytes) |
+| **Vectors 表** | ~1.5KB/chunk | 384 维 float32 = 1536 bytes (b64 ~2KB) |
+| **Files 表** | ~200 bytes/file | path + hash + mtime |
+| **BM25 索引** | ~0.3KB/chunk | token 倒排索引（内存/持久化） |
+| **SQLite 开销** | ~10-15% | 索引、WAL、页对齐 |
+
+#### 11.3.2 典型项目存储估算
+
+| 项目规模 | 文件数 | Chunks 数 | 源码体积 | 索引体积 | 索引/源码比 |
+|----------|--------|-----------|----------|----------|-------------|
+| **小型**（个人项目） | 50 | 300 | 500KB | **~1.2MB** | 2.4x |
+| **中型**（创业公司） | 300 | 2,000 | 5MB | **~7MB** | 1.4x |
+| **中大型**（团队项目） | 1,000 | 5,000 | 15MB | **~18MB** | 1.2x |
+| **大型**（企业级） | 3,000 | 15,000 | 50MB | **~55MB** | 1.1x |
+| **超大型**（Monorepo） | 10,000 | 50,000 | 200MB | **~180MB** | 0.9x |
+
+#### 11.3.3 详细计算示例
+
+以**中型项目**（2,000 chunks）为例：
+
+```
+Chunks 表:    2,000 × 1.5KB  = 3,000KB  = 3.0MB
+Vectors 表:   2,000 × 1.5KB  = 3,000KB  = 3.0MB
+Files 表:       300 × 0.2KB  =    60KB  = 0.06MB
+BM25 索引:    2,000 × 0.3KB  =   600KB  = 0.6MB
+SQLite 开销:  ~10%           =   670KB  = 0.67MB
+─────────────────────────────────────────────────
+总计:                                    ≈ 7.3MB
+```
+
+#### 11.3.4 Embedding 模型对存储的影响
+
+| 模型 | 维度 | 单 Vector 大小 | 2k chunks 占用 |
+|------|------|----------------|----------------|
+| **all-MiniLM-L6-v2**（默认） | 384 | 1.5KB | 3MB |
+| all-mpnet-base-v2 | 768 | 3KB | 6MB |
+| text-embedding-ada-002 | 1536 | 6KB | 12MB |
+| text-embedding-3-large | 3072 | 12KB | 24MB |
+
+**建议**：使用 384 维模型（all-MiniLM-L6-v2）在质量和存储间取得平衡。
+
+#### 11.3.5 存储优化策略
+
+| 策略 | 节省比例 | 说明 |
+|------|----------|------|
+| **量化 Vectors** | 40-60% | float32 → int8/float16 |
+| **压缩 Chunks** | 30-50% | zstd 压缩文本（牺牲查询速度） |
+| **增量状态导出** | N/A | 只导出变更，减少传输体积 |
+| **共享 Embeddings** | 20-30% | 相似 chunk 复用向量（V2） |
+
+#### 11.3.6 与竞品对比
+
+| 工具 | 索引/源码比 | 说明 |
+|------|-------------|------|
+| **ccq-engine** | 1.0-1.5x | 本地 SQLite |
+| Augment | 0.1-0.3x | 云端压缩存储 |
+| Sourcegraph | 2-5x | 含符号索引、依赖图 |
+| GitHub Copilot | 0x（云端） | 不占本地空间 |
+
+**结论**：ccq-engine 的本地存储占用在合理范围内（通常 <100MB），对于 3k chunks 以下的项目完全可接受。
 
 ---
 
@@ -746,9 +1096,9 @@ VS Code 的 Copilot Chat 支持通过 MCP servers 扩展工具与上下文来源
 
 **增量索引（V1 手动模式）**：
 - [x] 文件级 hash 判断
-- [x] 手动触发 `ctx index`
+- [x] 手动触发 `ccq index`
 - [x] 删除文件自动清理
-- [ ] Watch 模式 `ctx index --watch`
+- [ ] Watch 模式 `ccq index --watch`
 - [ ] 进度条（首次索引）
 - [ ] 行号范围追踪
 
@@ -810,10 +1160,10 @@ VS Code 的 Copilot Chat 支持通过 MCP servers 扩展工具与上下文来源
 
 | 场景 | 推荐策略 | 命令 |
 |------|----------|------|
-| **开始新任务** | 手动索引一次 | `ctx index` |
-| **开发中频繁修改** | Watch 模式（后台监听） | `ctx index --watch` |
+| **开始新任务** | 手动索引一次 | `ccq index` |
+| **开发中频繁修改** | Watch 模式（后台监听） | `ccq index --watch` |
 | **Git 分支切换** | 自动触发（V2 可选） | 配置 post-checkout hook |
-| **发布前** | 全量重建索引 | `ctx index --full` |
+| **发布前** | 全量重建索引 | `ccq index --full` |
 
 ### 14.2 性能优化建议
 
@@ -822,43 +1172,95 @@ VS Code 的 Copilot Chat 支持通过 MCP servers 扩展工具与上下文来源
 | 首次索引慢 | 确保 `.gitignore` 正确排除 node_modules/dist |
 | 频繁修改大文件 | 启用 V1.5 chunk 级复用 |
 | 多人协作频繁拉取 | Git hook 自动索引 |
-| CI/CD 环境 | 缓存 `.ctx/` 目录，只做增量更新 |
+| CI/CD 环境 | 缓存 `.ccq/` 目录，只做增量更新 |
 
 ### 14.3 故障恢复
 
 ```bash
 # 索引损坏或不一致
-ctx index --full --force      # 强制全量重建
+ccq index --full --force      # 强制全量重建
 
 # 检查索引状态
-ctx status
+ccq status
 
 # 查看索引日志
-ctx logs
+ccq logs
 ```
 
 ---
 
 ## 附录 A：配置文件示例
 
-**.ctx/config.yaml**
+**.ccq/config.yaml**
 
 ```yaml
-# 索引配置
+# === 语言支持 ===
+languages:
+  # Tier 1：优先支持，默认启用
+  tier1:
+    - typescript
+    - javascript
+    - python
+    - go
+    - rust
+    - java
+  # Tier 2：按需加载 parser
+  tier2:
+    - cpp
+    - c
+    - csharp
+    - ruby
+    - php
+    - kotlin
+    - swift
+  # Tier 3：社区 parser
+  tier3:
+    - bash
+    - sql
+    - scala
+    - lua
+    - haskell
+    - ocaml
+
+# === 模式选择 ===
+mode: hybrid  # full_auto | hybrid | manual_only
+
+# hybrid 模式配置
+hybrid:
+  project_md:
+    enabled: true
+    path: .agentmem/project.md
+    max_lines: 50           # 限制 project.md 行数
+    auto_include: true      # 检索结果自动包含 project.md
+  agents_md:
+    enabled: false          # 可选：启用 AGENTS.md 跨工具兼容
+    path: AGENTS.md
+
+# === 索引配置 ===
 index:
   ignore:
     - .gitignore
     - .augmentignore
   maxFileSize: 1MB
-  
-# Chunk 配置
+  # 语言特定配置
+  language_overrides:
+    python:
+      include_docstrings: true
+    go:
+      include_comments: true
+    rust:
+      include_doc_comments: true
+
+# === Chunk 配置 ===
 chunker:
   astEnabled: true
   fallback:
     maxChars: 1500
     overlap: 200
+  # 超长定义二次切分阈值
+  maxChunkSize: 2000
 
-# Embeddings 配置
+# === Embeddings 配置 ===
 embeddings:
   mode: offline  # offline | online
   offline:
@@ -868,13 +1270,26 @@ embeddings:
     headers:
       Authorization: "Bearer ${ENV:API_KEY}"
     batchSize: 32
+    normalize: true
 
-# 检索配置
+# === 检索配置 ===
 retrieval:
   topK: 10
   maxChars: 8000
   rrf:
     k: 60
+  # 高级：searchAndAsk（V1.5+）
+  ask:
+    enabled: true
+    provider: online  # offline | online
+    model: gpt-4o-mini
+    timeout: 30s
+
+# === 状态持久化 ===
+state:
+  export_path: .ccq/state.json
+  auto_export: true     # 索引完成后自动导出
+  compression: true     # 压缩导出文件
 ```
 
 ---
@@ -882,13 +1297,13 @@ retrieval:
 ## 附录 B：常见问题
 
 **Q: 首次索引很慢怎么办？**
-A: 确保 .gitignore 正确排除 node_modules 等大目录。使用 `ctx status` 检查索引统计。
+A: 确保 .gitignore 正确排除 node_modules 等大目录。使用 `ccq status` 检查索引统计。
 
 **Q: 检索结果不准确？**
 A: 尝试更具体的查询词。精确符号名用 BM25 效果更好，描述性问题用语义检索。
 
 **Q: 如何与 IDE 的代码搜索配合？**
-A: ctx-engine 适合语义理解和跨文件关联；IDE 搜索适合精确文本匹配。两者互补。
+A: ccq-engine 适合语义理解和跨文件关联；IDE 搜索适合精确文本匹配。两者互补。
 
 ---
 

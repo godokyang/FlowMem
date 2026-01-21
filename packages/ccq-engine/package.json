@@ -1,0 +1,47 @@
+{
+  "name": "@ccq/engine",
+  "version": "0.1.0",
+  "description": "代码库上下文查询引擎 - Semantic search with AST-aware chunking",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "jest",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "keywords": [
+    "semantic-search",
+    "code-search",
+    "embeddings",
+    "ast",
+    "tree-sitter",
+    "bm25",
+    "vector-search"
+  ],
+  "author": "FlowMem Contributors",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/FlowMem.git"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "dependencies": {
+    "better-sqlite3": "^9.0.0",
+    "commander": "^11.0.0",
+    "web-tree-sitter": "^0.20.8",
+    "tiktoken": "^1.0.10",
+    "ignore": "^5.3.0",
+    "zod": "^3.22.0"
+  },
+  "optionalDependencies": {
+    "@xenova/transformers": "^2.10.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.8",
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.0",
+    "jest": "^29.7.0"
+  }
+}

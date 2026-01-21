@@ -1,0 +1,44 @@
+{
+  "name": "@ccq/workflow",
+  "version": "2.0.0",
+  "description": "FlowMem 工作流引擎 - AI 上下文记忆系统",
+  "main": "src/index.js",
+  "bin": {
+    "flowmem": "./bin/flowmem.js"
+  },
+  "scripts": {
+    "test": "jest",
+    "build": "node scripts/build-adapters.sh",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "keywords": [
+    "ai",
+    "context",
+    "memory",
+    "agent",
+    "cursor",
+    "claude",
+    "copilot",
+    "windsurf",
+    "manus"
+  ],
+  "author": "FlowMem Contributors",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/FlowMem.git"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "dependencies": {
+    "chalk": "^4.1.2",
+    "commander": "^11.0.0",
+    "fs-extra": "^11.2.0",
+    "inquirer": "^8.2.6",
+    "js-yaml": "^4.1.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  }
+}

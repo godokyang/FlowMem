@@ -1,44 +1,32 @@
 {
-  "name": "flowmem",
-  "version": "1.1.0",
-  "description": "上下文记忆系统 - AI 编辑器持久化工作记忆管理",
-  "main": "src/index.js",
-  "bin": {
-    "flowmem": "./bin/flowmem.js"
-  },
-  "scripts": {
-    "test": "jest",
-    "build": "node scripts/build-adapters.sh",
-    "prepublishOnly": "npm run build && npm test"
-  },
-  "keywords": [
-    "ai",
-    "context",
-    "memory",
-    "agent",
-    "cursor",
-    "claude",
-    "copilot",
-    "windsurf",
-    "manus"
+  "name": "flowmem-root",
+  "version": "2.0.0",
+  "description": "FlowMem v2 - 代码库上下文查询引擎 Monorepo",
+  "private": true,
+  "workspaces": [
+    "packages/*"
   ],
-  "author": "FlowMem Contributors",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/yourusername/FlowMem.git"
+  "scripts": {
+    "test": "lerna run test",
+    "build": "lerna run build",
+    "dev": "lerna run dev --parallel",
+    "clean": "lerna clean --yes",
+    "bootstrap": "lerna bootstrap",
+    "publish": "lerna publish from-package"
+  },
+  "devDependencies": {
+    "lerna": "^8.1.8",
+    "typescript": "^5.3.0",
+    "@types/node": "^20.10.0",
+    "jest": "^29.7.0"
   },
   "engines": {
     "node": ">=16.0.0"
   },
-  "dependencies": {
-    "chalk": "^4.1.2",
-    "commander": "^11.0.0",
-    "fs-extra": "^11.2.0",
-    "inquirer": "^8.2.6",
-    "js-yaml": "^4.1.0"
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/FlowMem.git"
   },
-  "devDependencies": {
-    "jest": "^29.7.0"
-  }
+  "author": "FlowMem Contributors",
+  "license": "MIT"
 }

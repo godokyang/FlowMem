@@ -1,6 +1,7 @@
 // Chunk DAO
 
 import type { Chunk } from '../core/types.js';
+import Database from 'better-sqlite3';
 
 export class ChunkDAO {
   constructor(private db: Database.Database) {}
@@ -36,7 +37,7 @@ export class ChunkDAO {
   }
 
   getById(id: string): Chunk | undefined {
-    const row = this.db.prepare('SELECT * FROM chunks WHERE id = ?').get(id);
+    const row = this.db.prepare('SELECT * FROM chunks WHERE id = ?').get(id) as any;
     if (!row) return undefined;
     return {
       id: row.id,
@@ -51,7 +52,25 @@ export class ChunkDAO {
     };
   }
 
-  getLanguageStats() { path: string; files: number; chunks: number }[] {
+  getChunks(ids: string[]): Chunk[] {
+    if (ids.length === 0) return [];
+    const placeholders = ids.map(() => '?').join(',');
+    const rows = this.db.prepare(`SELECT * FROM chunks WHERE id IN (${placeholders})`).all(...ids) as any[];
+    
+    return rows.map(row => ({
+      id: row.id,
+      path: row.path,
+      text: row.text,
+      startLine: row.start_line,
+      endLine: row.end_line,
+      chunkType: row.chunk_type,
+      symbolName: row.symbol_name,
+      tokens: row.tokens,
+      hash: row.chunk_hash
+    }));
+  }
+
+  getLanguageStats(): { path: string; files: number; chunks: number }[] {
     const rows = this.db.prepare(`
       SELECT 
         path,

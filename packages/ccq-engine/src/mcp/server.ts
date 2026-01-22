@@ -1,10 +1,11 @@
-// MCP Server 实现
-
+// @ts-ignore
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+// @ts-ignore
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
+// @ts-ignore
 } from '@modelcontextprotocol/sdk/types.js';
 
 export class MCPServer {
@@ -58,7 +59,7 @@ export class MCPServer {
       };
     });
 
-    this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    this.server.setRequestHandler(CallToolRequestSchema, async (request: any) => {
       const { name, arguments: args } = request.params;
       
       if (name === 'codebase_retrieval') {
@@ -88,7 +89,7 @@ export class MCPServer {
         return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
       }
       
-      throw new Error(\`Tool \${name} not found\`);
+      throw new Error(`Tool ${name} not found`);
     });
   }
 

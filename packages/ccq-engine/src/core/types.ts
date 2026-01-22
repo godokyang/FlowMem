@@ -23,6 +23,16 @@ export interface Config {
       bm25: number;
     };
   };
+  embeddings?: {
+    mode: 'offline' | 'online';
+    offline?: { model: string };
+    online?: { url?: string; headers?: Record<string, string>; batchSize?: number; normalize?: boolean };
+  };
+  chunker?: {
+    astEnabled?: boolean;
+    fallback?: { maxChars: number; overlap: number };
+    maxChunkSize?: number;
+  };
 }
 
 export interface Chunk {

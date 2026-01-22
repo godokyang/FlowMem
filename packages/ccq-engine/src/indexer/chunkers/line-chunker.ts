@@ -1,6 +1,4 @@
-// Line Chunker - Fallback 策略
-
-import type { Chunk } from '../core/types.js';
+import type { Chunk } from '../../core/types';
 
 export class LineChunker {
   async chunk(content: string, filePath: string): Promise<Chunk[]> {

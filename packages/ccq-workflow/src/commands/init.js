@@ -88,7 +88,27 @@ async function initCommand(options) {
   
   if (withMcp) {
     console.log(chalk.cyan('\n🔌 配置 MCP 审核...'));
-    console.log(chalk.gray('(MCP 功能将在 v2.0.0 中提供)'));
+    const mcpConfig = {
+      mcpServers: {
+        "ccq-engine": {
+          "command": "npx",
+          "args": ["-y", "@ccq/engine", "mcp"]
+        }
+      }
+    };
+
+    if (adapterName === 'claude-code' || adapterName === 'cursor' || adapterName === 'windsurf') {
+      const settingsPath = path.join(projectRoot, '.vscode', 'mcp.json'); // Example path, adjust per adapter
+      // Real path depends on OS and editor. For project-local, .vscode/mcp.json isn't standard yet but common convention.
+      // For Claude Desktop it's global config.
+      // For now, let's just write to a local config file user can use.
+      const localMcpPath = path.join(projectRoot, 'mcp-server-config.json');
+      await fs.writeJson(localMcpPath, mcpConfig, { spaces: 2 });
+      console.log(chalk.green(`✓ 生成 MCP 配置: ${localMcpPath}`));
+      console.log(chalk.yellow('  请手动将此配置添加到您的编辑器 MCP 设置中。'));
+    } else {
+      console.log(chalk.yellow('⚠️  当前适配器暂不支持自动 MCP 配置'));
+    }
   }
   
   console.log(chalk.green('\n🎉 安装完成！'));

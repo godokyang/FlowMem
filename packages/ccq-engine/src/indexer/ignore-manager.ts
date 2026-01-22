@@ -1,5 +1,3 @@
-// Ignore 策略管理器
-
 import ignore from 'ignore';
 import fs from 'fs/promises';
 import path from 'path';
@@ -20,6 +18,8 @@ export class IgnoreManager {
   ];
 
   async loadRules(root: string) {
+    this.ig.add(this.forceIgnore);
+
     const gitignorePath = path.join(root, '.gitignore');
     try {
       const content = await fs.readFile(gitignorePath, 'utf-8');
@@ -27,7 +27,12 @@ export class IgnoreManager {
     } catch {
     }
 
-    this.ig.add(this.forceIgnore);
+    const augmentignorePath = path.join(root, '.augmentignore');
+    try {
+      const content = await fs.readFile(augmentignorePath, 'utf-8');
+      this.ig.add(content);
+    } catch {
+    }
   }
 
   ignores(filePath: string): boolean {

@@ -1,5 +1,4 @@
-// Parser 工厂 - Tree-sitter WASM 加载
-
+// @ts-ignore
 import Parser from 'web-tree-sitter';
 import path from 'path';
 import fs from 'fs/promises';

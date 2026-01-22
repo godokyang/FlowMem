@@ -1,6 +1,7 @@
 // File DAO
 
 import type { FileMeta } from '../core/types.js';
+import Database from 'better-sqlite3';
 
 export class FileDAO {
   constructor(private db: Database.Database) {}
@@ -14,7 +15,7 @@ export class FileDAO {
   }
 
   getByPath(path: string): FileMeta | undefined {
-    const row = this.db.prepare('SELECT * FROM files WHERE path = ?').get(path);
+    const row = this.db.prepare('SELECT * FROM files WHERE path = ?').get(path) as any;
     if (!row) return undefined;
     return {
       path: row.path,

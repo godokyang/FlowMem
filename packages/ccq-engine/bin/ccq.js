@@ -1,28 +1,34 @@
 #!/usr/bin/env node
-// @ccq/engine CLI 入口
 
 const { program } = require('commander');
-const { ContextEngine } = require('./src/engine.js');
 
-program
-  .name('ccq')
-  .description('Codebase Context Query Engine');
+const registerCommands = async () => {
+  const { 
+    initCommand,
+    indexCommand, 
+    contextCommand, 
+    askCommand, 
+    statusCommand,
+    exportCommand,
+    importCommand,
+    addRemoteCommand,
+    installHooksCommand
+  } = await import('../dist/cli/commands.js');
 
-program.command('index')
-  .description('Index the codebase')
-  .option('--full', 'Force full re-indexing')
-  .option('--watch', 'Watch mode')
-  .action(async (options) => {
-    console.log('Indexing codebase...', options);
-    // TODO: 实现索引逻辑
-  });
+  program
+    .name('ccq')
+    .description('Codebase Context Query Engine')
+    .addCommand(initCommand)
+    .addCommand(indexCommand)
+    .addCommand(contextCommand)
+    .addCommand(askCommand)
+    .addCommand(statusCommand)
+    .addCommand(exportCommand)
+    .addCommand(importCommand)
+    .addCommand(addRemoteCommand)
+    .addCommand(installHooksCommand);
 
-program.command('context')
-  .argument('<query>', 'Search query')
-  .option('--topK <n>', 'Number of chunks', '10')
-  .action(async (query, options) => {
-    console.log('Searching:', query, options);
-    // TODO: 实现检索逻辑
-  });
+  await program.parseAsync(process.argv);
+};
 
-program.parse();
+registerCommands().catch(console.error);

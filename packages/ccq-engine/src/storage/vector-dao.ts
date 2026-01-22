@@ -1,6 +1,7 @@
 // Vector DAO
 
 import type { Vector } from '../core/types.js';
+import Database from 'better-sqlite3';
 
 function toBase64(f32: Float32Array): string {
   return Buffer.from(f32.buffer).toString('base64');
@@ -34,7 +35,7 @@ export class VectorDAO {
   }
 
   getById(id: string): Vector | undefined {
-    const row = this.db.prepare('SELECT * FROM vectors WHERE id = ?').get(id);
+    const row = this.db.prepare('SELECT * FROM vectors WHERE id = ?').get(id) as any;
     if (!row) return undefined;
     return {
       id: row.id,
@@ -45,7 +46,7 @@ export class VectorDAO {
 
   getAll(): Vector[] {
     const rows = this.db.prepare('SELECT * FROM vectors').all() as any[];
-    return rows.map(row => ({
+    return rows.map((row: any) => ({
       id: row.id,
       dim: row.dim,
       vector: fromBase64(row.b64)

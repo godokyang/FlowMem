@@ -10,10 +10,11 @@ export class OpenAIProvider {
   }
 
   async embed(texts: string[]): Promise<number[][]> {
-    const response = await fetch(\`\${this.baseUrl}/embeddings\`, {
+    // @ts-ignore
+    const response = await fetch(`${this.baseUrl}/embeddings`, {
       method: 'POST',
       headers: {
-        'Authorization': \`Bearer \${this.apiKey}\`,
+        'Authorization': `Bearer ${this.apiKey}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
@@ -23,10 +24,10 @@ export class OpenAIProvider {
     });
 
     if (!response.ok) {
-      throw new Error(\`OpenAI API error: \${response.statusText}\`);
+      throw new Error(`OpenAI API error: ${response.statusText}`);
     }
 
     const data = await response.json();
-    return data.data.map((d: any) => d.embedding);
+    return (data as any).data.map((d: any) => d.embedding);
   }
 }

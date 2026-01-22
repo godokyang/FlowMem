@@ -4,7 +4,7 @@ description: FlowMem 上下文记忆系统。使用持久化 Markdown 文件管�
 autorun: true
 ---
 
-# 上下文记忆系统规则
+# 上下文记忆系统规则 (v2.0)
 
 > 🚨 **工具覆盖规则（最高优先级）**
 >
@@ -18,12 +18,13 @@ autorun: true
 > 1. 所有 todolist 操作**必须**通过 `flowmem todo` CLI
 > 2. 其他文件（project.md, request.md）使用 Read/Write/Edit 工具
 
-> 🛑 **三秒检查 (每次行动前):**
-> 1. 刚检索了吗？→ 累计 ≥3 文件未沉淀？**必须立即沉淀**
-> 2. 要创建文件了吗？→ 该更新的更新了吗？
-> 3. 用户回复了吗？→ 文档同步了吗？
+> 🛑 **混合模式检查（启用 MCP 时）:**
+> 1. 需要理解代码？→ 优先调用 `codebase_retrieval`
+> 2. project.md 还需要吗？→ 只记录隐性知识（约定/坑点）
+> 3. 检索≥3次？→ 不再强制沉淀（代码已自动索引）
 
-> 使用持久化 Markdown 文件管理 AI 工作记忆
+> 使用持久化 Markdown 文件管理 AI 工作记忆  
+> **v2.0 新增**: 支持 MCP 混合模式（可选启用 ccq-engine 自动索引）
 
 ---
 
@@ -153,10 +154,24 @@ flowmem todo set --id TODO-001 --priority high
 
 ## 整体流程
 
+### 传统模式（纯 FlowMem）
+
 ```
-project.md → 检索理解 → 🛑债务≥3?沉淀 → request.md 
-→ 澄清需求 → 🛑确认? → todolist.md → 执行Todo → 归档
+project.md → 检索理解 → request.md → 澄清需求 
+→ 🛑确认? → todolist.md → 执行Todo → 归档
 ```
+
+### 混合模式（FlowMem + ccq-engine，推荐）
+
+```
+按需 codebase_retrieval → request.md → 澄清需求 
+→ 🛑确认? → todolist.md → 执行Todo（再次按需检索）→ 归档
+```
+
+**区别**：
+- ✅ **无需预先读 project.md**（按需调用 `codebase_retrieval`）
+- ✅ **无需债务机制**（代码知识自动索引）
+- ✅ **project.md 变为可选**（只记录隐性知识）
 
 ---
 
@@ -171,22 +186,33 @@ project.md → 检索理解 → 🛑债务≥3?沉淀 → request.md
 
 ## 7 条关键规则
 
-### 规则 1: 上下文管理
+### 规则 1: 上下文管理（混合模式 v2.0）
 
-**前提:** 执行复杂任务前必须先创建/读取 `project.md`
+**前提:** 
+- **传统模式**: 执行复杂任务前必须先读取 `project.md`
+- **混合模式（启用 MCP）**: 按需调用 `codebase_retrieval`，project.md 可选
 
-**刷新顺序:** `todolist.md` → `request.md` → `project.md`
+**刷新顺序:** `todolist.md` → `request.md` → `project.md`（可选）
 
 **何时刷新:**
 - 必须：跨模块、连续3+ Todo、遇错、用户变更
 - 建议：跨阶段、新代码区域、上下文超50k tokens
 
 **刷新流程:**
+
+**传统模式**：
 1. 读取当前 Todo
 2. 读取需求目标
 3. 读取项目背景
 4. 检索代码/文档（如需要）
 5. 立即补充新知识到文档
+
+**混合模式（启用 MCP 时）**：
+1. 读取当前 Todo
+2. 读取需求目标
+3. 调用 `codebase_retrieval("查询关键词")` 检索相关代码
+4. （可选）读取 project.md 中的隐性知识
+5. 无需手动沉淀（代码已自动索引）
 
 ### 规则 2: 需求先澄清,确认再执行
 
@@ -215,7 +241,9 @@ project.md → 检索理解 → 🛑债务≥3?沉淀 → request.md
 ### 规则 4: 存储而非填充
 长篇内容存入文件,上下文中只保留路径引用。
 
-### 规则 5: 知识沉淀（债务机制）
+### 规则 5: 知识沉淀
+
+#### 传统模式（债务机制）
 
 **债务计数：**
 - 每 read_file 一次 = 债务 +1
@@ -230,6 +258,38 @@ project.md → 检索理解 → 🛑债务≥3?沉淀 → request.md
 **防膨胀：**
 - `project.md` 超过 300 行 → 迁移详细内容到 `docs/`
 - 单模块超过 50 行 → 拆分为独立文档
+
+#### 混合模式（启用 MCP 时）
+
+**✅ 债务机制已废除**
+
+**理由**：
+- 代码知识通过 `ccq index` 自动索引
+- AI 直接调用 `codebase_retrieval` 按需检索
+- 无需手动维护 project.md 中的代码结构
+
+**project.md 新定位**（可选，约 50 行）：
+- ✅ **保留**: 隐性知识（架构决策、历史坑点、特殊约定）
+- ❌ **删除**: 代码结构、模块列表、API 文档（自动索引）
+
+**示例 project.md（混合模式）**：
+```markdown
+# [项目名称]
+
+## 一句话描述
+[这个项目是什么、为谁解决什么问题]
+
+## 技术栈
+- 语言: TypeScript
+- 框架: Next.js
+
+## 🔗 代码检索
+使用 ccq-engine 自动索引，AI 直接调用 codebase_retrieval。
+
+## ⚠️ 必读注意事项
+- [坑点1: 特殊约定]
+- [坑点2: 不在代码里的重要信息]
+```
 
 ### 规则 6: 上下文优化
 
@@ -246,6 +306,8 @@ project.md → 检索理解 → 🛑债务≥3?沉淀 → request.md
 ---
 ## 🔒 检查点协议
 
+### 传统模式
+
 AI 执行关键操作前输出检查点：
 
 ```
@@ -254,20 +316,93 @@ AI 执行关键操作前输出检查点：
 判定: [通过/阻塞: 原因]
 ```
 
+### 混合模式（启用 MCP 时）
+
+检查点简化（无债务检查）：
+
+```
+操作: [操作类型]
+检索: [是否需要 codebase_retrieval]
+判定: [通过/阻塞: 原因]
+```
+
 ---
 ## 🔧 审核工具
 
 ```bash
 flowmem audit          # 运行全部检查
-flowmem audit debt     # 仅检查债务
+flowmem audit debt     # 仅检查债务（传统模式）
 flowmem audit --json   # JSON 输出
 ```
 
-**10 个检查项**：debt, sync, project, size, request-size, todo, active, confirmed, archive, structure
+**检查项**：
+- **传统模式（10 项）**: debt, sync, project, size, request-size, todo, active, confirmed, archive, structure
+- **混合模式（8 项）**: sync, todo, active, confirmed, archive, structure（移除 debt, project 强制检查）
+
+## 🔌 MCP 集成（混合模式）
+
+### 启用步骤
+
+```bash
+# 1. 初始化 FlowMem 并启用 MCP
+flowmem init --with-mcp
+
+# 2. 安装 ccq-engine
+npm install @ccq/engine
+
+# 3. 索引代码库
+npx ccq index
+```
+
+### AI 使用指引
+
+#### 代码检索 vs 直接读取
+
+| 场景 | 操作 |
+|------|------|
+| 需要找代码位置 | `codebase_retrieval("关键词")` |
+| 需要理解某模块 | `codebase_retrieval("模块名 + 功能描述")` |
+| 已知具体路径 | `Read file` |
+| 需要修改文件 | `Read file` → `Edit file` |
+
+#### 示例
+
+```
+用户: "帮我修改登录逻辑"
+
+AI 操作:
+1. codebase_retrieval("登录 login authentication") 
+   → 获取相关代码 chunks
+2. 根据 chunks 确定具体文件路径
+3. Read file 读取完整文件
+4. Edit file 修改
+```
+
+### MCP 工具参考
+
+启用 MCP 后，AI 可以调用以下工具：
+
+```typescript
+// 语义检索
+codebase_retrieval({
+  query: "用户认证逻辑",
+  topK: 10
+})
+
+// 问答
+codebase_ask({
+  question: "这个项目如何处理错误？"
+})
+
+// 状态查询
+codebase_status()
+```
 
 ---
 
 ## 反模式对照
+
+### 传统模式
 
 | ❌ 不要 | ✅ 而是 |
 |---------|---------|
@@ -275,6 +410,16 @@ flowmem audit --json   # JSON 输出
 | 用户回复后不更新文档 | 立即更新 request.md |
 | 输出「💡 知识沉淀」后跳过 | 输出后立即执行对应操作 |
 | 高风险任务批量执行 | 单步执行，及时更新 |
+
+### 混合模式（启用 MCP 时）
+
+| ❌ 不要 | ✅ 而是 |
+|---------|---------|
+| 仍然使用债务机制 | 直接调用 codebase_retrieval |
+| 维护完整的 project.md | project.md 只记录隐性知识 |
+| 检索前先读 project.md | 直接 codebase_retrieval |
+| 用户回复后不更新文档 | 立即更新 request.md（保留） |
+| 高风险任务批量执行 | 单步执行，及时更新（保留） |
 
 ---
 

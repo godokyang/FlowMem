@@ -1,9 +1,13 @@
 {
   "name": "@ccq/engine",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "代码库上下文查询引擎 - Semantic search with AST-aware chunking",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "bin": {
+    "ccq": "./bin/ccq.js",
+    "ccq-mcp": "./bin/ccq-mcp.js"
+  },
   "scripts": {
     "build": "tsc",
     "test": "jest",

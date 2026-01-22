@@ -37,10 +37,10 @@ build_standard_pack() {
     
     echo "📦 构建 $name 包..."
     
-    # 1. 复制静态资源 (Templates, Scripts, Examples, Docs)
+    # 1. 复制静态资源 (Templates, Scripts, Examples)
     cp -r "$ROOT_DIR/templates" "$pack_dir/$assets_dir/"
     cp -r "$ROOT_DIR/examples" "$pack_dir/$assets_dir/"
-    cp -r "$ROOT_DIR/docs" "$pack_dir/$assets_dir/"
+    # docs 在 templates 子目录下，已随 templates 复制
     
     # 2. 复制并处理脚本 (setup.sh 及其他)
     mkdir -p "$pack_dir/$assets_dir/scripts"
@@ -127,7 +127,6 @@ mkdir -p "$FULL_PATH"
 # 复制所有资源到 Skill 目录内（自包含设计）
 cp -r "$ROOT_DIR/templates" "$FULL_PATH/"
 cp -r "$ROOT_DIR/examples" "$FULL_PATH/"
-cp -r "$ROOT_DIR/docs" "$FULL_PATH/"
 mkdir -p "$FULL_PATH/scripts"
 cp "$SCRIPT_DIR/setup.sh" "$FULL_PATH/scripts/"
 cp "$SCRIPT_DIR/archive-task.sh" "$FULL_PATH/scripts/"

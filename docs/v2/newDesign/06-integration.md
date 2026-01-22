@@ -52,7 +52,7 @@
 |--------|------|
 | 规则 1: 必须先读 project.md | **删除** - 改为按需 codebase_retrieval |
 | 规则 5: 债务机制 | **删除** - 代码知识自动索引，无需手动沉淀 |
-| 规则 6: 刷新上下文顺序 | **简化** - todolist → request（不再需要 project） |
+| 规则 6: 刷新上下文顺序 | **简化** - todolist → request（不再强制读 project） |
 | 三秒检查: 债务 ≥3? | **删除** |
 | 检查点协议: 债务 X/3 | **删除** |
 
@@ -190,7 +190,7 @@ Claude Desktop 支持本地 MCP server（stdio）并可通过配置文件注册�
   "mcpServers": {
     "ccq-engine": {
       "command": "npx",
-      "args": ["ccq-engine", "mcp"],
+      "args": ["-y", "@ccq/engine", "mcp"],
       "env": {
         "CCQ_ROOT": "/path/to/project"
       }
@@ -214,13 +214,105 @@ VS Code 的 Copilot Chat 支持通过 MCP servers 扩展工具与上下文来源
   "servers": {
     "ccq-engine": {
       "command": "npx",
-      "args": ["ccq-engine", "mcp"]
+      "args": ["-y", "@ccq/engine", "mcp"]
     }
   }
 }
 ```
 
 需要注意：企业/组织策略可能禁用 MCP，需要管理员开启相关政策。
+
+---
+
+## 4. 实际命令参考
+
+### 4.1 ccq-workflow 命令
+
+```bash
+# 初始化 FlowMem 工作流
+flowmem init                           # 自动检测编辑器
+flowmem init --adapter cursor          # 指定适配器
+flowmem init --with-mcp                # 启用 MCP 集成
+
+# 查看状态
+flowmem status
+
+# 运行审核
+flowmem audit                          # 运行所有检查
+flowmem audit debt                     # 债务检查
+flowmem audit workflow                 # 工作流检查
+flowmem audit --json                   # JSON 输出
+
+# 管理 TodoList
+flowmem todo list                      # 列出所有任务
+flowmem todo stats                     # 任务统计
+flowmem todo add --content "..." --priority high
+flowmem todo update --id 1 --status in_progress
+flowmem todo get --id 1
+flowmem todo set --id 1 --status completed
+
+# 升级
+flowmem upgrade
+```
+
+### 4.2 ccq-engine 命令
+
+```bash
+# 初始化配置
+ccq init
+
+# 索引代码库
+ccq index                              # 增量索引
+ccq index --full                       # 全量重建
+ccq index --watch                      # 监听模式
+
+# 检索上下文
+ccq context "如何处理用户认证"           # 语义搜索
+ccq context "login" --topK 20          # 指定返回数量
+ccq context "auth" --mode hybrid       # 混合模式（默认）
+ccq context "jwt" --mode bm25          # 仅关键词
+ccq context "user" --mode vector       # 仅向量
+
+# AI 问答
+ccq ask "这个项目的架构是什么？"
+ccq ask "如何实现登录？" --model gpt-4o
+
+# 查看状态
+ccq status
+
+# 状态持久化
+ccq export ./backup/state.json         # 导出索引
+ccq import ./backup/state.json         # 导入索引
+
+# 远程文件索引（Direct Context）
+ccq add-remote https://raw.githubusercontent.com/owner/repo/main/README.md
+
+# 安装 Git Hooks
+ccq install-hooks
+
+# 启动 MCP Server
+ccq-mcp                                # stdio 模式
+```
+
+### 4.3 MCP 工具调用（AI 自动使用）
+
+通过 MCP 集成后，AI 可以自动调用以下工具：
+
+```typescript
+// 语义检索
+codebase_retrieval({
+  query: "用户认证逻辑",
+  topK: 10
+})
+
+// 问答
+codebase_ask({
+  question: "这个项目如何处理错误？"
+})
+
+// 状态查询
+codebase_status()
+```
 
 ---
 

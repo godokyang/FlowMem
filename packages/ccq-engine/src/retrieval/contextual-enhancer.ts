@@ -1,6 +1,6 @@
 // Contextual Retrieval - Chunk上下文增强
 
-import type { Chunk } from '../../core/types.js';
+import type { Chunk } from '../core/types';
 
 export class ContextualEnhancer {
   static enhance(chunk: Chunk, context: { file?: string; className?: string; functionName?: string }): string {

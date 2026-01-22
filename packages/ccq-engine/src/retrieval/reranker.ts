@@ -1,6 +1,6 @@
 // Rerank - 重排序器
 
-import type { Chunk } from '../../core/types.js';
+import type { Chunk } from '../core/types';
 
 export class Reranker {
   // Simple keyword boosting for now. Real implementation would use Cross-Encoder.

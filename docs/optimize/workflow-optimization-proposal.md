@@ -412,6 +412,48 @@ Phase 1.3: 方案迭代（最多 2 轮）
 
 ---
 
+#### 审计留痕与可追溯性
+
+`.agentmem/` 允许存敏感信息，因此保留最小可回放证据链。
+
+**最低留存**:
+- 原始需求与用户确认版本（含时间戳）
+- 关键检索片段引用或摘要（含来源路径/哈希）
+- Solver/Critic/Reviewer 结论摘要（含拒绝原因）
+- 变更摘要与 apply 记录（文件列表 + 简述）
+- 测试/诊断结果与未运行原因
+
+**推荐格式**:
+- `.agentmem/logs/trace.jsonl` 按步骤追加
+- `.agentmem/logs/decision-<id>.md` 记录关键决策
+
+#### 项目级策略配置（可选）
+
+在 `.agentmem/project.md` 中集中配置风险与测试策略，作为默认值。
+
+```yaml
+workflow:
+  risk:
+    high_paths:
+      - "auth/"
+      - "security/"
+      - "migrations/"
+      - "db/"
+      - "infra/"
+      - ".github/workflows/"
+      - ".env"
+  tests:
+    primary:
+      - "lsp_diagnostics"
+      - "npm test"
+      - "npm run build"
+    fallback:
+      - "pytest"
+      - "go test ./..."
+```
+
+---
+
 **核心记忆（必须持久化）**:
 
 | 信息 | 存储位置 | 说明 |
@@ -893,9 +935,23 @@ const context = await mcp.codebase_retrieval({
 | 边界范围 | 0-2 | 是否清楚包含/不包含什么？ | "这次只做 API 还是前端也要改？" |
 | 约束条件 | 0-2 | 是否了解技术/业务限制？ | "有没有性能要求或兼容性限制？" |
 
+#### 评分阈值自适应
+
+根据复杂度动态调整阈值，避免小任务过度追问或大任务追问不足。
+
+**复杂度估算**:
+- 低: ≤2 文件、无跨模块
+- 中: 3-5 文件或 1 个跨模块
+- 高: >5 文件或含新 API/迁移/权限
+
+**阈值**:
+- 低复杂度: ≥6 通过
+- 中复杂度: ≥7 通过
+- 高复杂度: ≥8 通过
+
 **止损机制**:
-- ≥7分: 继续进入方案设计
-- <7分: ⛔ 停止，向用户提出 2-3 个针对性问题
+- 达到阈值: 继续进入方案设计
+- 低于阈值: ⛔ 停止，向用户提出 2-3 个针对性问题
 
 **追问策略**:
 
@@ -945,7 +1001,13 @@ const context = await mcp.codebase_retrieval({
 | 🔄 调整 | 提出具体修改意见，AI 重新整合 |
 | ❌ 否决 | 选择备选方案或要求重新分析 |
 
-**默认行为**: 如果用户 30 秒内无响应且方案明确，AI 可提示「将按推荐方案继续，如需调整请说明」。
+**默认行为**: 不允许静默确认。  
+**例外**: 仅当用户显式 opt-in 且风险为 Low 时允许静默继续。
+
+建议在 request.md 中加入:
+```yaml
+allow_silent_continue: false
+```
 
 #### 步骤 1.5: 生成 request.md（用户确认后）
 
@@ -1066,6 +1128,30 @@ for each todo in todolist:
 | Major | 错误处理完整 | 建议 |
 | Minor | 命名清晰、注释适当 | 可选 |
 
+#### 高风险变更升级门槛
+
+为避免自动执行带来不可逆风险，引入风险分级与升级动作。
+
+**风险分级规则**:
+- Low: 修改 ≤2 个文件、≤50 LOC、无权限/认证/迁移
+- Medium: 3-5 文件或 50-200 LOC，或涉及核心模块
+- High: 认证/权限/生产配置/数据迁移/删除/不可逆操作，或 >200 LOC、>8 文件
+
+**升级动作**:
+- Low: Reviewer 通过即可自动 apply
+- Medium: Reviewer 通过 + 必跑测试；测试缺失需用户确认
+- High: 必须用户确认后才 apply，且需二次审核或显式高风险批准
+
+**默认高风险路径（可在 project.md 覆盖）**:
+- auth/
+- security/
+- migrations/
+- db/
+- infra/
+- config/
+- .github/workflows/
+- .env
+
 ---
 
 ### 3.5 Phase 4: 交付
@@ -1076,6 +1162,17 @@ for each todo in todolist:
 
 - 对照 request.md 的验收标准
 - 检查所有 todo 状态
+
+#### 测试与诊断策略（可配置 + 兜底）
+
+**优先级**:
+1) `.agentmem/project.md` 指定命令
+2) 项目脚本（package.json / Makefile / go test / pytest / cargo test）
+3) 无可用命令 → 标记“未运行 + 风险原因”
+
+**要求**:
+- 每次交付必须写明：执行了哪些测试，哪些未执行及原因
+- 高风险变更若无测试可跑，必须用户确认
 
 #### 测试运行
 
@@ -1107,14 +1204,22 @@ npm run build     # 构建检查
 
 ## 四、辅助机制
 
-### 4.1 MCP 拦截器
+### 4.1 MCP/写入拦截器（升级版）
 
 防止 AI 绕过规则：
 
 ```typescript
-// 拦截直接 Edit todolist.md
-if (tool === "edit" && filePath.endsWith("todolist.md")) {
-  throw new Error("请使用 flowmem todo CLI，禁止直接 Edit");
+function isProtected(path: string): boolean {
+  return [
+    ".agentmem/request.md",
+    ".agentmem/todolist.md",
+    ".agentmem/project.md"
+  ].some((protectedPath) => path.endsWith(protectedPath));
+}
+
+// 写入层统一拦截，禁止绕过
+if (isProtected(filePath) && !viaFlowmemCli()) {
+  throw new Error("受保护文件禁止直接写入，请使用 flowmem CLI");
 }
 ```
 

@@ -41,6 +41,33 @@
 
 ---
 
+## 项目级策略配置（可选）
+
+在 `.agentmem/project.md` 中可集中配置风险与测试策略，存在则优先使用。
+
+```yaml
+workflow:
+  risk:
+    high_paths:
+      - "auth/"
+      - "security/"
+      - "migrations/"
+      - "db/"
+      - "infra/"
+      - ".github/workflows/"
+      - ".env"
+  tests:
+    primary:
+      - "lsp_diagnostics"
+      - "npm test"
+      - "npm run build"
+    fallback:
+      - "pytest"
+      - "go test ./..."
+```
+
+---
+
 ## TodoList 格式规范（v1.1.0+）
 
 ### YAML Frontmatter 格式
@@ -131,6 +158,14 @@ flowmem todo set --id TODO-001 --priority high
 - 3 次工具调用内可完成
 
 > 💡 宁可多用不可少用
+
+---
+
+## 风险升级规则
+
+- 高风险变更必须用户确认后 apply
+- 高风险路径优先使用 `.agentmem/project.md` 中的 `workflow.risk.high_paths`
+- 未配置时默认高风险路径: `auth/`, `security/`, `migrations/`, `db/`, `infra/`, `config/`, `.github/workflows/`, `.env`
 
 ---
 

@@ -1,17 +1,19 @@
 # @ccq/workflow
 
-FlowMem 工作流引擎 - AI 上下文记忆系统
+FlowMem Workflow Engine - AI 上下文记忆与自动化工作流系统
 
 ## 🎯 介绍
 
-@ccq/workflow 是 FlowMem v2 的工作流管理包，提供基于 Markdown 的 AI 上下文记忆系统。通过结构化的工作流程，帮助 AI 更好地理解和执行复杂任务。
+@ccq/workflow 是 FlowMem v2 的工作流管理包，提供基于 Markdown 的 AI 上下文记忆系统和**智能 Agent 工作流引擎**。通过结构化的工作流程，帮助 AI 更好地理解和执行复杂任务。
 
-### 核心理念
+### 核心特性
 
-- **存储而非填充**: 将知识持久化到 Markdown 文件，而非反复填充到上下文窗口
-- **需求先澄清**: 复杂任务必须先创建 `request.md` 澄清需求
-- **单步执行**: 通过 `todolist.md` 管理任务，避免 AI 一次性执行过多步骤
-- **编辑器无关**: 支持 7 种主流 AI 编辑器/工具
+- **多 Agent 协作**：6 个专门角色的 Agent（Analyst, Solver, Critic, Planner, Coder, Reviewer）协同工作。
+- **严谨的状态机**：25 个工作流状态，确保流程可控、可追溯。
+- **记忆管理**：支持长短期记忆，具备状态保存与恢复功能。
+- **安全拦截**：内置写入拦截器，防止意外修改受保护文件。
+- **人机交互**：关键决策点（如方案确认、高风险操作）需人工介入。
+- **编辑器无关**：支持 7 种主流 AI 编辑器/工具。
 
 ## 📦 安装
 
@@ -45,7 +47,17 @@ flowmem init --adapter gemini
 flowmem init --with-mcp
 ```
 
-### 2. 查看状态
+### 2. 启动自动化工作流 (New)
+
+```bash
+# 启动智能工作流，自动执行需求分析、方案设计、编码和审查
+flowmem workflow start "实现一个用户登录功能，使用 JWT 认证"
+
+# 恢复中断的工作流
+flowmem workflow resume
+```
+
+### 3. 查看状态
 
 ```bash
 flowmem status
@@ -85,6 +97,13 @@ flowmem todo get --id 1
 
 # 设置任务字段
 flowmem todo set --id 1 --status completed
+```
+
+### 6. Git Hook 集成
+
+```bash
+# 安装 pre-commit hook，防止意外修改受保护文件
+flowmem hook install
 ```
 
 ## 📁 目录结构

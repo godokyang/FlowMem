@@ -5,4 +5,4 @@
  * 上下文记忆系统命令行工具
  */
 
-require('../src/cli');
+require('../dist/cli');

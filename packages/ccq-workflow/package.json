@@ -2,13 +2,20 @@
   "name": "@ccq/workflow",
   "version": "2.0.0",
   "description": "FlowMem 工作流引擎 - AI 上下文记忆系统",
-  "main": "src/index.js",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "bin",
+    "templates",
+    "README.md"
+  ],
   "bin": {
     "flowmem": "./bin/flowmem.js"
   },
   "scripts": {
     "test": "jest",
-    "build": "bash scripts/build-adapters.sh",
+    "build": "tsc",
     "prepublishOnly": "npm run build && npm test"
   },
   "keywords": [
@@ -29,16 +36,22 @@
     "url": "https://github.com/yourusername/FlowMem.git"
   },
   "engines": {
-    "node": ">=16.0.0"
+    "node": "^14.18.0"
   },
   "dependencies": {
+    "@types/minimatch": "^5.1.2",
     "chalk": "^4.1.2",
     "commander": "^11.0.0",
     "fs-extra": "^11.2.0",
-    "inquirer": "^8.2.6",
-    "js-yaml": "^4.1.0"
+    "inquirer": "^8.2.7",
+    "js-yaml": "^4.1.0",
+    "minimatch": "^10.1.1",
+    "ora": "^9.1.0"
   },
   "devDependencies": {
-    "jest": "^29.7.0"
+    "@types/inquirer": "^9.0.9",
+    "@types/jest": "^30.0.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.4.6"
   }
 }

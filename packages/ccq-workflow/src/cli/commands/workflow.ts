@@ -23,7 +23,24 @@ workflowCommands.command('start')
 
     try {
       const projectRoot = process.cwd();
-      const llmClient = new LLMClient({});
+
+      // 从环境变量读取 LLM 配置
+      const apiKey = process.env.LLM_API_KEY || process.env.OPENROUTER_API_KEY;
+      const provider = (process.env.LLM_PROVIDER || 'openrouter') as any;
+      const model = process.env.LLM_MODEL || 'anthropic/claude-3.5-sonnet';
+
+      if (!apiKey) {
+        spinner.fail('未配置 LLM API Key');
+        console.error(chalk.red('请设置环境变量 LLM_API_KEY 或 OPENROUTER_API_KEY'));
+        process.exit(1);
+      }
+
+      const llmClient = new LLMClient({
+        apiKey,
+        provider,
+        model
+      });
+
       const memoryManager = new MemoryManager(projectRoot, llmClient);
       const agentRegistry = new AgentRegistry(llmClient);
       const retrieverFactory = new RetrieverFactory();
@@ -59,7 +76,24 @@ workflowCommands.command('resume')
 
     try {
       const projectRoot = process.cwd();
-      const llmClient = new LLMClient({});
+
+      // 从环境变量读取 LLM 配置
+      const apiKey = process.env.LLM_API_KEY || process.env.OPENROUTER_API_KEY;
+      const provider = (process.env.LLM_PROVIDER || 'openrouter') as any;
+      const model = process.env.LLM_MODEL || 'anthropic/claude-3.5-sonnet';
+
+      if (!apiKey) {
+        spinner.fail('未配置 LLM API Key');
+        console.error(chalk.red('请设置环境变量 LLM_API_KEY 或 OPENROUTER_API_KEY'));
+        process.exit(1);
+      }
+
+      const llmClient = new LLMClient({
+        apiKey,
+        provider,
+        model
+      });
+
       const memoryManager = new MemoryManager(projectRoot, llmClient);
       const agentRegistry = new AgentRegistry(llmClient);
       const retrieverFactory = new RetrieverFactory();

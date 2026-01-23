@@ -16,6 +16,24 @@ export class CCQEngineRetriever extends BaseContextRetriever {
     super();
   }
 
+  /**
+   * 检查 CCQ Engine 是否可用
+   */
+  async isAvailable(): Promise<boolean> {
+    if (this.ccqEngineAvailable) {
+      return true;
+    }
+
+    const engine = await this.tryImportCCQEngine();
+    if (engine) {
+      this.ccqEngine = engine;
+      this.ccqEngineAvailable = true;
+      return true;
+    }
+
+    return false;
+  }
+
   async retrieve(query: import('./types').ContextQuery): Promise<import('./types').ContextResult> {
     if (!this.ccqEngineAvailable) {
       console.warn('@ccq/engine not available, falling back to simple retriever');

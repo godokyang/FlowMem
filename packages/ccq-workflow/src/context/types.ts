@@ -14,7 +14,7 @@ export interface ContextRetriever {
   /**
    * 是否可用
    */
-  isAvailable(): boolean;
+  isAvailable(): boolean | Promise<boolean>;
 }
 
 /**

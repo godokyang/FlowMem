@@ -24,6 +24,7 @@ export class Orchestrator {
     data: {}
   };
   private ui: UserInteractionHandler;
+  private contextRetriever: any = null;
 
   constructor(config: OrchestratorConfig) {
     this.config = config;
@@ -51,7 +52,9 @@ export class Orchestrator {
     console.log(chalk.gray('[Orchestrator] 初始化中...'));
 
     await this.config.memoryManager.updateCoreMemory({});
-    await RetrieverFactory.create(this.config.projectRoot);
+
+    // 使用注入的 contextRetrieverFactory 创建检索器
+    this.contextRetriever = await RetrieverFactory.create(this.config.projectRoot);
 
     console.log(chalk.green('[Orchestrator] 初始化完成'));
   }
@@ -81,6 +84,11 @@ export class Orchestrator {
 
     await this.phase3();
 
+    // 进入 Phase 4
+    await this.transitionTo('phase4.start', {});
+
+    await this.phase4();
+
     await this.transitionTo('completed', {});
 
     console.log(chalk.bold.green(`\n======== 工作流完成 ========`));
@@ -107,7 +115,12 @@ export class Orchestrator {
 
     // 根据当前状态跳转到对应的处理逻辑
     if (this.currentState.startsWith('phase1.')) {
-      await this.phase1(this.stateMetadata.data!.request);
+      const request = this.stateMetadata.data?.request;
+      if (!request) {
+        console.error(chalk.red('状态数据缺失：未找到 request'));
+        return;
+      }
+      await this.phase1(request);
     } else if (this.currentState.startsWith('phase2.')) {
       await this.phase2();
     } else if (this.currentState.startsWith('phase3.')) {
@@ -142,58 +155,79 @@ export class Orchestrator {
         coreMemory: this.config.memoryManager.getCoreMemory()
       });
 
-      if (analystResult.score < 7) {
+      // 如果评分低于 7 分或有追问，则进行追问
+      if (analystResult.score < 7 || analystResult.questions.length > 0) {
         console.log(chalk.yellow(`[Phase 1] 需求不清晰，需要追问。Score: ${analystResult.score}`));
 
-        clarifiedRequirements.push(...(analystResult.questions || []));
+        // 遍历所有问题进行追问
+        for (const question of analystResult.questions) {
+          const userAnswer = await this.ui.handleAnalystQuestion(question);
+
+          if (userAnswer) {
+            // 记录问题和用户回答
+            clarifiedRequirements.push(`Q: ${question.question}`);
+            clarifiedRequirements.push(`A: ${userAnswer}`);
+          } else {
+            console.log(chalk.gray('[Phase 1] 用户跳过追问'));
+          }
+        }
 
         await this.transitionTo('phase1.analyst_scoring', {});
-      } else if (analystResult.questions.length > 0) {
-        console.log(chalk.blue(`[Phase 1] 生成追问 ${i + 1}/${maxIterations}`));
-
-        // 使用 UI Handler 处理追问
-        const userAnswer = await this.ui.handleAnalystQuestion(analystResult.questions[i]);
-
-        if (userAnswer) {
-          clarifiedRequirements.push(...(analystResult.questions[i]));
-        } else {
-          console.log(chalk.gray('[Phase 1] 用户跳过追问'));
-        }
       } else {
+        // 评分达标且无追问，退出循环
+        console.log(chalk.green(`[Phase 1] 需求清晰度达标。Score: ${analystResult.score}`));
         break;
       }
     }
 
     await this.transitionTo('phase1.solver_design', { clarifiedRequirements });
 
-    const solverResult = await this.config.agentRegistry.call('solver', {
-      request: request,
-      constraints: codeContext?.constraints || [],
-      previousSolution: null,
-      criticFeedback: null,
-      coreMemory: this.config.memoryManager.getCoreMemory()
-    });
+    // Solver + Critic 迭代机制
+    let solverResult: any;
+    let criticResult: any;
+    const maxSolverIterations = 3;
+    let solverIteration = 0;
 
-    this.stateMetadata.data!.solution = solverResult.solution;
+    while (solverIteration < maxSolverIterations) {
+      console.log(chalk.blue(`[Phase 1] Solver 设计方案 (迭代 ${solverIteration + 1}/${maxSolverIterations})`));
 
-    await this.transitionTo('phase1.critic_review', { criticIssues: [] });
+      solverResult = await this.config.agentRegistry.call('solver', {
+        request: request,
+        constraints: codeContext?.constraints || [],
+        previousSolution: solverIteration > 0 ? solverResult?.solution : null,
+        criticFeedback: solverIteration > 0 ? criticResult?.issues : null,
+        coreMemory: this.config.memoryManager.getCoreMemory()
+      });
 
-    const criticResult = await this.config.agentRegistry.call('critic', {
-      solution: solverResult.solution,
-      requirement: request,
-      constraints: codeContext?.constraints || [],
-      coreMemory: this.config.memoryManager.getCoreMemory()
-    });
+      this.stateMetadata.data!.solution = solverResult.solution;
 
-    if (criticResult.passed) {
-      console.log(chalk.green('[Phase 1] 方案通过 Critic 审核'));
-    } else {
-      console.log(chalk.yellow(`[Phase 1] 方案需要修改。Issues: ${criticResult.issues.length}`));
+      await this.transitionTo('phase1.critic_review', { criticIssues: [] });
+
+      console.log(chalk.blue(`[Phase 1] Critic 审核方案 (迭代 ${solverIteration + 1}/${maxSolverIterations})`));
+
+      criticResult = await this.config.agentRegistry.call('critic', {
+        solution: solverResult.solution,
+        requirement: request,
+        constraints: codeContext?.constraints || [],
+        coreMemory: this.config.memoryManager.getCoreMemory()
+      });
+
+      if (criticResult.passed) {
+        console.log(chalk.green('[Phase 1] 方案通过 Critic 审核'));
+        break;
+      } else {
+        console.log(chalk.yellow(`[Phase 1] 方案需要修改。Issues: ${criticResult.issues.length}`));
+        solverIteration++;
+
+        if (solverIteration >= maxSolverIterations) {
+          console.log(chalk.yellow('[Phase 1] 已达到最大迭代次数，使用当前方案'));
+        }
+      }
     }
 
     await this.transitionTo('phase1.solution_confirm', {
       solution: solverResult.solution,
-      planScore: 7
+      planScore: criticResult.confidence || 7
     });
   }
 
@@ -234,43 +268,70 @@ export class Orchestrator {
     while (nextTodo) {
       console.log(chalk.blue(`[Phase 3] 执行任务: ${nextTodo.id} - ${nextTodo.content}`));
 
-      const context = await this.retrieveCodeContext(nextTodo);
+      const contextResult = await this.retrieveCodeContext(nextTodo);
 
-      await this.transitionTo('phase3.coder_implementation', { todoId: nextTodo.id, context });
+      // Coder + Reviewer 迭代机制
+      let coderResult: any;
+      let reviewerResult: any;
+      const maxCoderIterations = 3;
+      let coderIteration = 0;
 
-      const coderResult = await this.config.agentRegistry.call('coder', {
-        todo: nextTodo,
-        context: context,
-        previousChanges: null,
-        reviewerFeedback: null,
-        coreMemory: this.config.memoryManager.getCoreMemory()
-      });
+      while (coderIteration < maxCoderIterations) {
+        console.log(chalk.blue(`[Phase 3] Coder 实现代码 (迭代 ${coderIteration + 1}/${maxCoderIterations})`));
 
-      this.stateMetadata.data!.coderOutput = coderResult;
+        await this.transitionTo('phase3.coder_implementation', {
+          todoItem: nextTodo,
+          context: contextResult?.chunks || []
+        });
 
-      await this.transitionTo('phase3.reviewer_audit', {
-        todoId: nextTodo.id,
-        changes: coderResult.changes,
-        acceptanceCriteria: nextTodo.acceptance,
-        coreMemory: this.config.memoryManager.getCoreMemory()
-      });
+        coderResult = await this.config.agentRegistry.call('coder', {
+          todo: nextTodo,
+          context: contextResult?.chunks || [],
+          previousChanges: coderIteration > 0 ? coderResult?.changes : null,
+          reviewerFeedback: coderIteration > 0 ? reviewerResult?.issues : null,
+          coreMemory: this.config.memoryManager.getCoreMemory()
+        });
 
-      const reviewerResult = await this.config.agentRegistry.call('reviewer', {
-        todo: nextTodo,
-        changes: coderResult.changes,
-        acceptanceCriteria: nextTodo.acceptance,
-        coreMemory: this.config.memoryManager.getCoreMemory()
-      });
+        this.stateMetadata.data!.coderOutput = coderResult;
 
-      this.stateMetadata.data!.reviewerOutput = reviewerResult;
+        console.log(chalk.blue(`[Phase 3] Reviewer 审核代码 (迭代 ${coderIteration + 1}/${maxCoderIterations})`));
 
+        await this.transitionTo('phase3.reviewer_audit', {
+          todoId: nextTodo.id,
+          changes: coderResult.changes,
+          acceptanceCriteria: nextTodo.acceptance,
+          coreMemory: this.config.memoryManager.getCoreMemory()
+        });
+
+        reviewerResult = await this.config.agentRegistry.call('reviewer', {
+          todo: nextTodo,
+          changes: coderResult.changes,
+          acceptanceCriteria: nextTodo.acceptance,
+          coreMemory: this.config.memoryManager.getCoreMemory()
+        });
+
+        this.stateMetadata.data!.reviewerOutput = reviewerResult;
+
+        if (reviewerResult.passed) {
+          console.log(chalk.green(`[Phase 3] 任务完成并通过审核: ${nextTodo.id}`));
+          break;
+        } else {
+          console.log(chalk.yellow(`[Phase 3] 审核未通过，需要修复。Issues: ${reviewerResult.issues.length}`));
+          coderIteration++;
+
+          if (coderIteration >= maxCoderIterations) {
+            console.log(chalk.yellow('[Phase 3] 已达到最大迭代次数，标记任务为 blocked'));
+            nextTodo.status = 'blocked';
+            await this.config.memoryManager.updateTodoStatus(nextTodo.id, 'blocked');
+            break;
+          }
+        }
+      }
+
+      // 只有通过审核的任务才标记为 completed
       if (reviewerResult.passed) {
-        console.log(chalk.green(`[Phase 3] 任务完成并通过审核: ${nextTodo.id}`));
-
+        nextTodo.status = 'completed';
         await this.config.memoryManager.updateTodoStatus(nextTodo.id, 'completed');
-      } else {
-        console.log(chalk.red(`[Phase 3] 审核未通过，需要修复`));
-        console.log(`Issues: ${reviewerResult.issues.length}`);
       }
 
       nextTodo = this.getNextPendingTodo(todolist);
@@ -280,15 +341,143 @@ export class Orchestrator {
   }
 
   /**
+   * Phase 4: 最终审查、测试、交付报告
+   */
+  private async phase4(): Promise<void> {
+    console.log(chalk.yellow('\n[Phase 4] 最终审查与测试'));
+
+    // 生成交付报告
+    await this.generateDeliveryReport();
+
+    // 执行测试（如果有）
+    const testResults = await this.runTests();
+
+    await this.transitionTo('phase4.test_execution', { testResults });
+
+    if (testResults.passed) {
+      console.log(chalk.green('[Phase 4] 所有测试通过'));
+    } else {
+      console.log(chalk.yellow(`[Phase 4] 部分测试失败: ${testResults.failedCount}/${testResults.totalCount}`));
+    }
+
+    await this.transitionTo('phase4.test_complete', {});
+
+    console.log(chalk.green('[Phase 4] 最终审查完成'));
+  }
+
+  /**
+   * 生成交付报告
+   */
+  private async generateDeliveryReport(): Promise<void> {
+    const coreMemory = this.config.memoryManager.getCoreMemory();
+    const plannerOutput = this.stateMetadata.data?.plannerOutput;
+
+    if (!plannerOutput) {
+      console.warn(chalk.yellow('[Phase 4] 无 Planner 输出，跳过报告生成'));
+      return;
+    }
+
+    const todolist = plannerOutput.todolist;
+    const completedTodos = todolist.todos.filter((t: any) => t.status === 'completed');
+    const blockedTodos = todolist.todos.filter((t: any) => t.status === 'blocked');
+
+    const report = `# 交付报告
+
+## 需求概述
+
+${coreMemory.requirement}
+
+## 完成情况
+
+- **总任务数**: ${todolist.todos.length}
+- **已完成**: ${completedTodos.length}
+- **被阻塞**: ${blockedTodos.length}
+- **完成率**: ${Math.round((completedTodos.length / todolist.todos.length) * 100)}%
+
+## 已完成任务
+
+${completedTodos.map((t: any) => `- ✅ ${t.id}: ${t.content}`).join('\n')}
+
+${blockedTodos.length > 0 ? `## 被阻塞任务
+
+${blockedTodos.map((t: any) => `- 🚫 ${t.id}: ${t.content}`).join('\n')}` : ''}
+
+## 技术方案
+
+${coreMemory.chosenPlan}
+
+## 生成时间
+
+${new Date().toISOString()}
+`;
+
+    // 保存报告
+    const reportPath = `${this.config.projectRoot}/.agentmem/delivery-report.md`;
+    const fs = await import('fs/promises');
+    await fs.writeFile(reportPath, report);
+
+    console.log(chalk.green(`[Phase 4] 交付报告已生成: ${reportPath}`));
+  }
+
+  /**
+   * 运行测试
+   */
+  private async runTests(): Promise<{ passed: boolean; totalCount: number; failedCount: number }> {
+    console.log(chalk.blue('[Phase 4] 执行测试...'));
+
+    // 简化实现：尝试运行 npm test
+    try {
+      const { exec } = await import('child_process');
+      const { promisify } = await import('util');
+      const execAsync = promisify(exec);
+
+      await execAsync('npm test', { cwd: this.config.projectRoot });
+
+      return {
+        passed: true,
+        totalCount: 1,
+        failedCount: 0
+      };
+    } catch (error) {
+      console.log(chalk.yellow('[Phase 4] 测试执行失败或未配置测试'));
+
+      return {
+        passed: false,
+        totalCount: 1,
+        failedCount: 1
+      };
+    }
+  }
+
+  /**
    * 辅助方法：检索代码上下文
    */
   private async retrieveCodeContext(filters?: any): Promise<any> {
-    const retriever = await RetrieverFactory.create(this.config.projectRoot);
+    // 使用已初始化的 contextRetriever
+    if (!this.contextRetriever) {
+      console.warn(chalk.yellow('[Orchestrator] 检索器未初始化，尝试创建...'));
+      this.contextRetriever = await RetrieverFactory.create(this.config.projectRoot);
+    }
 
     try {
       const fileFilters = filters?.files || [];
-      const result = await retriever.retrieve({
-        text: fileFilters.join(' '),
+
+      // 构建更智能的检索 query
+      let queryText = '';
+      if (fileFilters.length > 0) {
+        // 如果有文件过滤器，使用文件名作为 query
+        queryText = fileFilters.join(' ');
+      } else if (filters?.content) {
+        // 如果有内容描述，使用内容作为 query
+        queryText = filters.content;
+      } else {
+        // 使用需求描述作为 query
+        const coreMemory = this.config.memoryManager.getCoreMemory();
+        queryText = coreMemory.requirement || 'relevant code';
+      }
+
+      const result = await this.contextRetriever.retrieve({
+        text: queryText,
         maxTokens: 4000,
         fileFilters: fileFilters
       });

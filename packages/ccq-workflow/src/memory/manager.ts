@@ -43,6 +43,27 @@ export class MemoryManager {
   async saveCoreMemory(): Promise<void> {
     const coreMemoryPath = path.join(this.agentmemDir, 'core.json');
     await this.ensureAgentmemDir();
+    await fs.writeFile(coreMemoryPath, JSON.stringify(this.coreMemory, null, 2));
+
+    // 同时生成 request.md
+    const requestMdPath = path.join(this.agentmemDir, 'request.md');
+    const requestMdContent = `# 需求描述
+
+${this.coreMemory.requirement}
+
+## 验收标准
+
+${this.coreMemory.acceptanceCriteria.map((c, i) => `${i + 1}. ${c}`).join('\n')}
+
+## 约束条件
+
+${this.coreMemory.constraints.map((c, i) => `${i + 1}. ${c}`).join('\n')}
+
+## 选定方案
+
+${this.coreMemory.chosenPlan}
+`;
+    await fs.writeFile(requestMdPath, requestMdContent);
   }
 
   async saveState(metadata: import('../orchestrator/types').StateMetadata): Promise<void> {
@@ -78,14 +99,38 @@ export class MemoryManager {
   }
 
   async appendTraceLog(entry: TraceLogEntry): Promise<void> {
-    console.log('[Memory] Trace log:', entry);
+    const traceLogPath = path.join(this.agentmemDir, 'trace.log');
+    await this.ensureAgentmemDir();
+
+    const logLine = `[${entry.timestamp}] ${entry.phase} - ${entry.event}: ${JSON.stringify(entry.data || {})}\n`;
+    await fs.appendFile(traceLogPath, logLine);
   }
 
   async logDecision(decision: Omit<DecisionLog, 'id' | 'timestamp'>): Promise<void> {
-    console.log('[Memory] Decision:', decision);
+    const decisionLogPath = path.join(this.agentmemDir, 'decisions.json');
+    await this.ensureAgentmemDir();
+
+    const fullDecision: DecisionLog = {
+      ...decision,
+      id: `decision-${Date.now()}`,
+      timestamp: new Date().toISOString()
+    };
+
+    // 读取现有决策日志
+    let decisions: DecisionLog[] = [];
+    try {
+      const content = await fs.readFile(decisionLogPath, 'utf-8');
+      decisions = JSON.parse(content);
+    } catch {
+      // 文件不存在或为空
+    }
+
+    decisions.push(fullDecision);
+    await fs.writeFile(decisionLogPath, JSON.stringify(decisions, null, 2));
   }
 
   async updateTodoStatus(todoId: string, status: 'pending' | 'in_progress' | 'completed' | 'blocked'): Promise<void> {
+    // 更新 phaseMemory 中的 todolist
     if (this.phaseMemory.data && this.phaseMemory.data.todolist) {
       const todolist = this.phaseMemory.data.todolist;
       const todo = todolist.todos.find((t: any) => t.id === todoId);
@@ -94,6 +139,69 @@ export class MemoryManager {
         todo.status = status;
       }
     }
+
+    // 更新 stateMetadata 中的 plannerOutput（如果存在）
+    if (this.phaseMemory.stateMetadata?.data?.plannerOutput) {
+      const plannerOutput = this.phaseMemory.stateMetadata.data.plannerOutput;
+      const todo = plannerOutput.todolist?.todos?.find((t: any) => t.id === todoId);
+
+      if (todo) {
+        todo.status = status;
+      }
+    }
+
+    // 保存 todolist.md
+    await this.saveTodoListMd();
+  }
+
+  /**
+   * 保存 todolist.md
+   */
+  private async saveTodoListMd(): Promise<void> {
+    const todolistMdPath = path.join(this.agentmemDir, 'todolist.md');
+    await this.ensureAgentmemDir();
+
+    const plannerOutput = this.phaseMemory.stateMetadata?.data?.plannerOutput;
+    if (!plannerOutput || !plannerOutput.todolist) {
+      return;
+    }
+
+    const todolist = plannerOutput.todolist;
+    let content = `# TodoList
+
+**总工作量**: ${todolist.meta.totalPoints} 点
+**预计时间**: ${todolist.meta.estimatedHours} 小时
+
+## 任务列表
+
+`;
+
+    for (const todo of todolist.todos) {
+      const statusIcon: Record<string, string> = {
+        pending: '⏳',
+        in_progress: '🔄',
+        completed: '✅',
+        blocked: '🚫'
+      };
+
+      const icon = statusIcon[todo.status] || '❓';
+
+      content += `### ${icon} ${todo.id}: ${todo.content}
+
+**状态**: ${todo.status}
+**工作量**: ${todo.points} 点
+**涉及文件**: ${todo.files.join(', ')}
+**依赖**: ${todo.dependsOn.length > 0 ? todo.dependsOn.join(', ') : '无'}
+
+**验收条件**:
+${todo.acceptance.map((a: string) => `- ${a}`).join('\n')}
+
+---
+
+`;
+    }
+
+    await fs.writeFile(todolistMdPath, content);
   }
 
   private async ensureAgentmemDir(): Promise<void> {

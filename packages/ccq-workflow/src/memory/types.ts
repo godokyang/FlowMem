@@ -42,8 +42,10 @@ export interface CodeChunk {
 
 /**
  * 工作流阶段
+ *
+ * 使用与 orchestrator 一致的详细状态定义
  */
-export type WorkflowPhase = 'init' | 'phase1' | 'phase2' | 'phase3' | 'phase4';
+export type WorkflowPhase = import('../orchestrator/types').WorkflowPhase;
 
 /**
  * 审计日志条目

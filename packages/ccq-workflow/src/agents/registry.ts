@@ -8,6 +8,12 @@ import {
   AgentOutput
 } from './types';
 import { LLMClient } from '../llm/client';
+import { AnalystAgent } from './analyst';
+import { SolverAgent } from './solver';
+import { CriticAgent } from './critic';
+import { PlannerAgent } from './planner';
+import { CoderAgent } from './coder';
+import { ReviewerAgent } from './reviewer';
 
 // 由于 Solver、Critic、Planner、Coder 还未实现，先声明
 type AgentType = Agent<any, any>;
@@ -23,8 +29,20 @@ export class AgentRegistry {
 
   constructor(llmClient: LLMClient) {
     this.llmClient = llmClient;
-    // 注意：Agent 实现类需要在创建时才导入，避免循环依赖
-    // 具体的 Agent 注册将在导入后调用 registerAgent
+    // 注册所有内置 Agent
+    this.registerBuiltinAgents();
+  }
+
+  /**
+   * 注册所有内置 Agent
+   */
+  private registerBuiltinAgents(): void {
+    this.register(new AnalystAgent(this.llmClient));
+    this.register(new SolverAgent(this.llmClient));
+    this.register(new CriticAgent(this.llmClient));
+    this.register(new PlannerAgent(this.llmClient));
+    this.register(new CoderAgent(this.llmClient));
+    this.register(new ReviewerAgent(this.llmClient));
   }
 
   /**

@@ -19,21 +19,30 @@ export class PreCommitAudit {
   async audit(): Promise<boolean> {
     try {
       const stagedFiles = await this.getStagedFiles();
-      
+
       for (const file of stagedFiles) {
         // 检查文件是否受保护
         // 注意：这里我们假设所有 staged 的修改都是 'modify' 操作
         // 实际上应该更精细地检查操作类型
-        const isProtected = await this.interceptor.checkWrite({
+        const checkResult = await this.interceptor.checkWrite({
           filePath: file,
           content: '',
           operation: 'modify',
           source: { type: 'direct', timestamp: new Date() }
         });
 
-        if (!isProtected.allowed) {
+        // 如果文件被完全禁止修改
+        if (!checkResult.allowed) {
           console.error(`❌ 拦截到受保护文件修改: ${file}`);
-          console.error(`原因: ${isProtected.reason}`);
+          console.error(`原因: ${checkResult.reason}`);
+          return false;
+        }
+
+        // 如果文件需要确认（高风险文件）
+        if (checkResult.requiresConfirmation) {
+          console.error(`⚠️  检测到高风险文件修改: ${file}`);
+          console.error(`原因: ${checkResult.reason}`);
+          console.error(`提示: 高风险文件需要在工作流中通过审核后才能提交`);
           return false;
         }
       }

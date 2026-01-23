@@ -1,6 +1,6 @@
 # 实施方案 - 01 Orchestrator 状态机模块
 
-**对应设计文档**: `../design/workflow-optimization-proposal-02-core-decisions.md` (2.6节)
+**对应设计文档**: `../design/workflow-optimization-proposal-02-architecture.md` (2.2节)
 
 ---
 

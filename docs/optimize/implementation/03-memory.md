@@ -1,6 +1,6 @@
 # 实施方案 - 03 Memory 管理模块
 
-**对应设计文档**: `../design/workflow-optimization-proposal-02-core-decisions.md` (Memory 管理策略)
+**对应设计文档**: `../design/workflow-optimization-proposal-04-mechanisms.md` (4.2节)
 
 ---
 

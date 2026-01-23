@@ -1,6 +1,6 @@
 # 实施方案 - 06 适配器同步模块
 
-**对应设计文档**: `../design/workflow-optimization-proposal-07-integration.md`
+**对应设计文档**: `../design/workflow-optimization-proposal-05-integration-rollout.md`
 
 ---
 

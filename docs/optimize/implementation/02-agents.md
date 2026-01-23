@@ -1,6 +1,6 @@
 # 实施方案 - 02 Agent 实现模块
 
-**对应设计文档**: `../design/workflow-optimization-proposal-02-core-decisions.md` (2.6节 Agent 清单)
+**对应设计文档**: `../design/workflow-optimization-proposal-02-architecture.md` (2.2节 Agent 清单)
 
 ---
 

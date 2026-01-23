@@ -1,4 +1,4 @@
-# FlowMem Workflow 优化方案 v2.7 - 四阶段工作流
+# FlowMem Workflow 优化方案 v2.8 - 四阶段工作流
 
 ## 三、四阶段工作流
 
@@ -13,22 +13,23 @@
 │                                                                 │
 │  Phase 1: 需求澄清                    输出: request.md          │
 │  ───────────────────                  ─────────────────         │
-│  🔵 1.1 上下文检索 (ccq-engine)                                 │
-│  🔵 1.2 需求完整性评分 (Analyst Agent)                          │
+│  🔵 1.1 上下文检索 (工具内置优先 / ccq-engine 可选)             │
+│  🔵 1.2 需求完整性评分 (Analyst Subagent)                       │
 │     └─ 🟡 <7分则追问用户补充信息                                │
-│  🔵 1.3 方案迭代 (Solver + Critic，最多 2 轮)                   │
+│  🔵 1.3 方案迭代 (Solver + Critic Subagent，最多 2 轮)          │
 │  🟡 1.4 用户确认方案 → 生成 request.md                          │
 │                                                                 │
 │  Phase 2: 详细规划                    输出: todolist.md         │
 │  ───────────────────                  ─────────────────         │
-│  🔵 2.1 WBS 任务分解 (功能→模块→文件→任务)                       │
+│  🔵 2.0 实施细化 (implementation 目录，可选)                    │
+│  🔵 2.1 WBS 任务分解 (Planner Subagent)                          │
 │  🔵 2.2 依赖识别 + 工作量估算 (任务点)                           │
 │  🟡 2.3 用户确认 → 生成 todolist.md                             │
 │                                                                 │
 │  Phase 3: 执行与审核                  默认无需用户介入           │
 │  ────────────────────                 ────────────────          │
-│  🔵 3.1 单步执行 (Coder Agent，每次1个Todo)                       │
-│  🔵 3.2 自动审核 (Reviewer Agent)                               │
+│  🔵 3.1 单步执行 (Coder Subagent，每次1个Todo)                    │
+│  🔵 3.2 自动审核 (Reviewer Subagent)                             │
 │  🔵 3.3 审核不通过 → 自动重做                                   │
 │  🔵 3.4 更新 todolist.md 状态 (使用 flowmem todo CLI)           │
 │                                                                 │
@@ -39,13 +40,40 @@
 │  🔵 4.3 生成交付报告                                            │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
+```
 
 **固定介入点**: 方案确认 + 规划确认（2 次）
-**可变介入点**: 需求评分追问、中途需求变更、Reviewer 无法自动修复、高风险变更或测试不可跑时
+**可变介入点**: 需求评分追问、实施细化确认（复杂任务/用户要求时）、中途需求变更、Reviewer 无法自动修复、高风险变更或测试不可跑时
 
 > 💡 用户可随时介入调整需求或方向，系统不应限制介入次数。
 > 上述流程是"最小介入路径"，不是"唯一路径"。
+
+#### 阶段映射（ccg-workflow → 四阶段）
+
 ```
+ccg-workflow 六阶段              FlowMem 四阶段
+━━━━━━━━━━━━━━━━━━━━━            ━━━━━━━━━━━━━━━━━━━
+Phase 0: Prompt增强     ┐
+Phase 1: 研究与分析     ├──→    Phase 1: 需求澄清
+Phase 2: 方案构思       ┘         输出: request.md
+
+Phase 3: 详细规划       ───→    Phase 2: 详细规划
+                                  输出: todolist.md
+
+Phase 4: 执行           ┐
+Phase 5: 优化           ├──→    Phase 3: 执行与审核
+                        ┘
+
+Phase 6: 评审           ───→    Phase 4: 交付
+```
+
+#### 简化路径（小任务）
+
+满足以下条件可走简化路径：
+- 影响 ≤2 文件，且不涉及核心模块/高风险路径
+- 无需跨模块协作
+
+简化路径仍需产出 `.agentmem/request.md` 与 `.agentmem/todolist.md`，但可跳过 Solver+Critic 迭代。
 
 ---
 
@@ -56,18 +84,27 @@
 **输入**: 用户的原始需求描述  
 **输出**: `.agentmem/request.md`
 
-#### 步骤 1.1: 上下文检索
+#### 步骤 1.1: 上下文检索（内置优先 + 可选增强）
+
+**调用规则**: ccq-engine 由 Orchestrator 按规则/配置触发（例如仓库大、跨语言、内置检索命中不足、跨会话需求），不由主模型自由决定。
 
 ```typescript
-// ccq-engine 只负责检索，不做分析
-const context = await mcp.codebase_retrieval({
-  query: userRequest,
-  topK: 15
-});
+// 优先使用工具内置检索；ccq-engine 作为可选增强
+const context = await tool.search_context({ query: userRequest, topK: 15 });
+// 可选：ccq-engine 用于大仓库或跨会话稳定检索
+// const context = await ccqEngine.retrieve(userRequest, { topK: 15 });
 // 检索结果提供给 Agent 系统（Analyst/Solver）分析
 ```
 
-#### 步骤 1.2: 需求完整性评分（Analyst Agent）
+#### 步骤 1.1.1: Context Curator（可选）
+
+当主会话 token 预算不足时，使用专用子代理进行上下文打包：
+
+1. 读取候选文件（来自检索结果）
+2. 输出 `.agentmem/context.md`（包含路径、行号、关键片段摘要）
+3. 其他 Agent 仅读取该文件，避免上下文膨胀
+
+#### 步骤 1.2: 需求完整性评分（Analyst Subagent）
 
 > **设计原则（借鉴 Lyra 4-D 方法论）**: AI 应主动识别缺失信息并追问，而不是让用户猜测 AI 需要什么。
 
@@ -149,9 +186,9 @@ const context = await mcp.codebase_retrieval({
 请回答以上问题，或直接告诉我"用默认方案"。
 ```
 
-#### 步骤 1.3: 方案迭代（Solver + Critic）
+#### 步骤 1.3: 方案迭代（Solver + Critic Subagent）
 
-> 详细机制见 [2.6 Agent 架构 - 方案迭代机制](./workflow-optimization-proposal-02-core-decisions.md#方案迭代机制solver--critic)
+> 详细机制见 [2.3 方案迭代机制](./workflow-optimization-proposal-02-architecture.md)
 
 **简要流程**:
 1. Solver 生成方案 V1
@@ -212,10 +249,29 @@ completeness_score: 9
 
 **目标**: 将 request.md 转化为可执行的 todolist.md
 
-**输入**: `.agentmem/request.md`  
+**输入**: `.agentmem/request.md`（如启用实施细化，还包括 `.agentmem/implementation/*`）  
 **输出**: `.agentmem/todolist.md`
 
+#### 步骤 2.0: 实施细化（可选）
+
+**目的**: 在复杂任务中提供最大信息量的确认材料，降低方向偏差。
+
+**触发条件（满足其一即可）**:
+- 修改 >5 文件或 >200 LOC
+- 跨模块/跨语言
+- 涉及迁移/权限/安全/核心流程
+- 用户明确要求“详细设计/伪代码/接口说明”
+
+**输出目录**: `.agentmem/implementation/`
+- `plan.md`（层级结构、关键步骤、执行顺序）
+- `pseudocode.md`（核心流程伪代码）
+- `interfaces.md`（接口/数据结构/配置清单）
+
+**用户确认**: 实施细化完成后由 Orchestrator 汇总要点并请求确认；拒绝则回退到方案修订。
+
 #### 步骤 2.1: WBS 任务分解
+
+如存在 implementation 目录，Planner 必须优先依据其内容拆解任务；若与 request.md 冲突，需提示用户确认。
 
 ```
 Level 1: 功能
@@ -268,13 +324,13 @@ todos:
 ```
 for each todo in todolist:
     │
-    ├─ 1. 检索上下文 (ccq-engine)
-    │      context = codebase_retrieval(todo.content)
+    ├─ 1. 检索上下文 (工具内置优先 / ccq-engine 可选)
+    │      context = search_context(todo.content)
     │
-    ├─ 2. 执行任务 (Coder Agent)
+    ├─ 2. 执行任务 (Coder Subagent)
     │      changes = coderImplement(todo, context)
     │
-    ├─ 3. 自动审核 (Reviewer Agent)
+    ├─ 3. 自动审核 (Reviewer Subagent)
     │      result = reviewerReview(changes, todo.acceptance)
     │
     ├─ 4. 结果处理
@@ -332,16 +388,11 @@ for each todo in todolist:
 
 #### 测试与诊断策略（可配置 + 兜底）
 
-**优先级**:
-1) `.agentmem/project.md` 指定命令
-2) 项目脚本（package.json / Makefile / go test / pytest / cargo test）
-3) 无可用命令 → 标记“未运行 + 风险原因”
+- 优先读取 `.agentmem/project.md` 的测试策略。
+- 无配置时按项目脚本执行，无法运行则标记原因。
 
-**要求**:
-- 每次交付必须写明：执行了哪些测试，哪些未执行及原因
-- 高风险变更若无测试可跑，必须用户确认
-
-#### 测试运行
+---
+#### 测试运行示例
 
 ```bash
 lsp_diagnostics   # 类型检查
@@ -349,7 +400,7 @@ npm run test      # 单元测试
 npm run build     # 构建检查
 ```
 
-#### 交付报告
+#### 交付报告模板
 
 ```markdown
 ## ✅ 功能开发完成

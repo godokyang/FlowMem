@@ -1,6 +1,6 @@
 # 实施方案 - 04 拦截器与审计模块
 
-**对应设计文档**: `../design/workflow-optimization-proposal-04-supporting-mechanisms.md`
+**对应设计文档**: `../design/workflow-optimization-proposal-04-mechanisms.md`
 
 ---
 

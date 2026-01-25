@@ -10,3 +10,4 @@
 - Lyra 本地副本: `docs/optimize/lyra.md`
 - OMC 参考项目: `docs/example/oh-my-claudecode-main/`
 - ccg-workflow 参考项目: `docs/example/ccg-workflow-main/`
+- Claude Code Hooks Guide: https://code.claude.com/docs/en/hooks-guide

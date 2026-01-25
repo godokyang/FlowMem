@@ -76,18 +76,92 @@ ESCALATION RECOMMENDED: [原因] -> [建议提升到的 Agent/模型]
 
 ---
 
-## 4.5 写入拦截与 Hook（可选）
+## 4.5 写入拦截与 Hooks（可选）
 
-**写入拦截（保护文件）**:
+### 4.5.1 写入拦截（保护文件）
+
+**保护清单**:
 - `.agentmem/request.md`
 - `.agentmem/todolist.md`
 - `.agentmem/project.md`
 
-**Git Pre-commit Hook**:
+**策略**:
+- 默认禁止直接写入，由 Orchestrator 统一更新。
+- 需要修改时，必须先在 todolist 标注理由并走 Reviewer 复核。
+
+### 4.5.2 Git Pre-commit Hook
 
 ```bash
 #!/bin/bash
 flowmem audit pre-commit || exit 1
+```
+
+### 4.5.3 Claude Code Hooks（AI 行为约束）
+
+**目标**: 利用 Claude Code 的 Hook 能力，在关键节点对 AI 行为做强约束，避免偷懒与规则遗漏。
+
+**Hook 设计原则**:
+- 快速、可重复、无网络依赖，失败时给出明确拒绝理由。
+- 高风险操作默认拦截（fail-closed），低风险仅提示（warn）。
+- 规则来源统一于 `.agentmem/project.md` 与 common-rules。
+
+**建议 Hook 点（示意，具体事件名以 Claude Code hooks guide 为准）**:
+
+| Hook 点 | 触发时机 | 目的 | 典型动作 |
+|---------|----------|------|----------|
+| **Pre-Session/Pre-Message** | 开始处理请求前 | 强制加载规则与上下文 | 检查 `.agentmem/request.md`/`todolist.md` 是否存在；缺失则要求补全 |
+| **Pre-Tool (Write/Edit)** | 写入或编辑前 | 阻止越权修改 | 拦截保护文件与高风险路径；校验当前 todo 是否匹配 |
+| **Post-Tool (Write/Edit)** | 写入或编辑后 | 留痕与同步 | 追加 `.agentmem/logs/trace.jsonl`；更新 todo 状态或变更摘要 |
+| **Pre-Response** | 回复用户前 | 质量门禁 | 如触及高风险路径，要求 Reviewer 通过或提示必须跑测试 |
+
+**Hook 输出约定**:
+- 阻断时必须返回可执行提示（例如"先补 request.md"、"需要 Reviewer 复核"）。
+- 通过时可补充简短提醒（例如"已记录变更摘要"）。
+
+**规则矩阵（示例）**:
+
+| 规则 | 触发条件 | 动作 |
+|------|----------|------|
+| **核心记忆缺失** | `.agentmem/request.md` 或 `.agentmem/todolist.md` 缺失 | block |
+| **保护文件写入** | 写入/编辑保护清单文件 | block |
+| **高风险路径** | 命中高风险路径且未 Reviewer 通过 | block |
+| **Todo 未对齐** | 当前变更不匹配进行中的 todo | warn |
+| **测试未记录** | 高风险变更且未记录测试计划 | warn |
+
+**最小落地顺序**:
+1. Pre-Tool 写入拦截（保护文件/高风险路径）。
+2. Pre-Response 质量门禁（Reviewer 结论/测试要求）。
+3. Post-Tool 留痕（trace.jsonl + 变更摘要）。
+4. Pre-Session 规则加载校验（核心记忆文件存在性）。
+
+**伪配置（示意，事件名以 Claude Code hooks guide 为准）**:
+
+```yaml
+hooks:
+  pre_message:
+    - id: require_core_mem
+      when: missing_files(".agentmem/request.md", ".agentmem/todolist.md")
+      action: block
+      message: "先补齐 request.md / todolist.md"
+  pre_tool:
+    - id: protect_agentmem
+      when: path_matches(".agentmem/request.md|.agentmem/todolist.md|.agentmem/project.md")
+      action: block
+      message: "保护文件禁止直接修改"
+    - id: high_risk_requires_review
+      when: path_matches_from_project_high_risk() && !reviewer_passed()
+      action: block
+      message: "高风险变更需 Reviewer 通过"
+  post_tool:
+    - id: append_trace
+      when: tool_is_write_or_edit()
+      action: log
+      target: ".agentmem/logs/trace.jsonl"
+  pre_response:
+    - id: require_test_note
+      when: touched_high_risk() && !test_note_present()
+      action: warn
+      message: "请补充测试计划或说明未运行原因"
 ```
 
 ---

@@ -5,6 +5,7 @@
 - 全量安装（commands + agents + skills）。
 - 使用 Subagent 实现上下文隔离与权限控制。
 - Orchestrator 留在主会话，负责阶段推进与文件产出校验。
+- 启用 Claude Code hooks，作为写入拦截与质量门禁（可与 Git hook 叠加）。
 - MCP 检索为可选增强（前台使用）。
 - 复杂任务可启用 `.agentmem/implementation/` 细化确认（结构/伪代码/接口）。
 

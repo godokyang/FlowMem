@@ -35,6 +35,7 @@
 - 支持 per-agent 模型/Key，无 key 时回退默认模型，不阻塞流程。
 - 其他 IDE 采用 v1 最简流程（单会话 + 固定产出文件）。
 - 复杂任务可增加 `.agentmem/implementation/` 细化层，提供结构/伪代码/接口说明用于确认。
+- 引入 Claude Code hooks 作为 AI 行为门禁（写入拦截/质量门禁/留痕）。
 - 借鉴 OMC 的 skills 分层、模板继承、升级信号、notepad 机制，但保持独立实现。
 
 ## 4. 术语

@@ -76,9 +76,12 @@ description: 'FlowMem 四阶段工作流 - 需求澄清→详细规划→执行�
 3. **需求完整性评分**（委托给 flowmem-analyst）：
    - 目标明确性（0-3）、预期结果（0-3）、边界范围（0-2）、约束条件（0-2）
    - ≥7 分：继续 | <7 分：⛔ 停止，提出补充问题
+   - **用户回答后立即更新 `request.md`**
 4. **方案设计**（委托给 flowmem-solver）：设计技术方案，输出到 `.agentmem/plan.md`
 5. **方案审核**（委托给 flowmem-critic）：审核方案，最多迭代 2 轮
-6. **用户确认**：等待用户确认方案 → 生成 `.agentmem/request.md`
+6. **用户确认**：等待用户明确回复「确认」「开始」等肯定词 → 生成 `.agentmem/request.md`
+
+**🚨 执行中需求变更**：立即更新 `request.md` → 评估影响 → 更新 `todolist.md`
 
 ### 📋 Phase 2：详细规划
 
@@ -120,6 +123,10 @@ description: 'FlowMem 四阶段工作流 - 需求澄清→详细规划→执行�
 3. 生成交付报告
 4. 请求最终用户确认
 5. 归档任务：`flowmem archive`
+
+**归档规则**：
+- **归档**（移到 `history/YYYYMMDD_*`）：`request.md`、`todolist.md`、`notes.md`、`task_logs/`
+- **保留**：`project.md`、`docs/`（长期知识库）
 
 ---
 
@@ -174,6 +181,20 @@ flowmem archive         # 归档当前任务
 - 架构/API/模块知识 → `project.md`
 - 需求边界/确认细节 → `request.md`
 - 临时发现/调试信息 → `notes.md`
+
+**防膨胀**：
+- `project.md` 超过 300 行 → 迁移详细内容到 `docs/`
+- 单模块超过 50 行 → 拆分为独立文档 `docs/modules/xxx.md`
+
+### 存储而非填充
+
+长篇内容存入文件，上下文中只保留路径引用：
+
+| ❌ 不要 | ✅ 而是 |
+|---------|---------|
+| 把检索结果全塞进上下文 | 存入 `context.md`，引用路径 |
+| 详细日志写在 todolist | 存入 `task_logs/`，只放链接 |
+| 大段代码复制到对话 | 标注文件路径和行号 |
 
 ### Context-Curator 触发条件
 

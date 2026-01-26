@@ -8,7 +8,8 @@
       "Bash(npm test:*)",
       "Bash(DEBUG=1 node:*)",
       "Bash(npm install @inquirer/select --save)",
-      "Bash(timeout 3 node:*)"
+      "Bash(timeout 3 node:*)",
+      "Bash(git checkout:*)"
     ]
   }
 }

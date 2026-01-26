@@ -1,6 +1,10 @@
 /**
  * flowmem build-adapters 命令
  * 构建各 IDE 的适配器包
+ *
+ * 两套独立数据源：
+ * - Claude Code: templates/commands/*.md (利用 commands、subagent 等特性)
+ * - 其他 IDE: adapters/common-rules.md (通用规则)
  */
 import { Command } from 'commander';
 import fs from 'fs';
@@ -31,8 +35,8 @@ const CLAUDE_COMMANDS = [
   'workflow',
   'plan',
   'execute',
-  'status',
   'resume',
+  'status',
   'audit'
 ];
 
@@ -55,15 +59,6 @@ function copyDir(src: string, dest: string): void {
       fs.copyFileSync(srcPath, destPath);
     }
   }
-}
-
-/**
- * 替换模板占位符（保留兼容性，但现在推荐使用 flowmem CLI）
- */
-function replaceTemplateVars(content: string, _assetsDir: string): string {
-  // 现在 common-rules.md 不再使用占位符，直接返回内容
-  // 保留此函数以便将来扩展
-  return content;
 }
 
 /**
@@ -91,6 +86,7 @@ function buildClaudeCodePack(
   ensureDir(commandsDir);
 
   // 复制命令模板
+  let cmdCount = 0;
   for (const cmd of CLAUDE_COMMANDS) {
     const srcFile = path.join(commandsTemplateDir, `${cmd}.md`);
     const destFile = path.join(commandsDir, `${cmd}.md`);
@@ -98,6 +94,7 @@ function buildClaudeCodePack(
     if (fs.existsSync(srcFile)) {
       fs.copyFileSync(srcFile, destFile);
       console.log(`  ✓ 复制命令: /flowmem:${cmd}`);
+      cmdCount++;
     } else {
       console.log(`  ⚠ 命令模板不存在: ${cmd}.md`);
     }
@@ -111,11 +108,11 @@ function buildClaudeCodePack(
     console.log('  ✓ 复制 hooks 配置示例');
   }
 
-  console.log(`  ✓ 生成 ${CLAUDE_COMMANDS.length} 个命令`);
+  console.log(`  ✓ 生成 ${cmdCount} 个命令`);
 }
 
 /**
- * 构建标准适配器包
+ * 构建标准适配器包（读取 common-rules.md）
  */
 function buildStandardPack(
   adapter: AdapterConfig,
@@ -138,9 +135,20 @@ function buildStandardPack(
 
   console.log(`📦 构建 ${adapter.name} 包...`);
 
-  // 复制模板目录
+  // 复制模板目录（排除 commands 目录）
   if (fs.existsSync(templatesDir)) {
-    copyDir(templatesDir, path.join(assetsPath, 'templates'));
+    const entries = fs.readdirSync(templatesDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.name === 'commands') continue;  // 跳过 commands 目录
+      const srcPath = path.join(templatesDir, entry.name);
+      const destPath = path.join(assetsPath, 'templates', entry.name);
+      if (entry.isDirectory()) {
+        copyDir(srcPath, destPath);
+      } else {
+        ensureDir(path.dirname(destPath));
+        fs.copyFileSync(srcPath, destPath);
+      }
+    }
     console.log('  ✓ 复制模板目录');
   }
 
@@ -151,13 +159,12 @@ function buildStandardPack(
   }
 
   // 生成规则文件
-  const ruleContent = replaceTemplateVars(templateContent, adapter.assetsDir);
   const ruleFilePath = path.join(packDir, adapter.ruleFile);
 
   // 确保规则文件目录存在
   ensureDir(path.dirname(ruleFilePath));
 
-  writeFile(ruleFilePath, ruleContent);
+  writeFile(ruleFilePath, templateContent);
   console.log(`  ✓ 生成规则: ${adapter.ruleFile}`);
 }
 
@@ -187,17 +194,23 @@ export const buildAdaptersCommand = new Command('build-adapters')
       process.exit(1);
     }
 
+    // 读取通用规则模板（其他 IDE 用）
+    let templateContent = '';
+    const needsTemplate = adaptersToBuild.some(a => !a.useCommands);
+    if (needsTemplate) {
+      templateContent = readFile(templateFile) || '';
+      if (!templateContent) {
+        console.error(`❌ 找不到模板文件: ${templateFile}`);
+        process.exit(1);
+      }
+    }
+
     for (const adapter of adaptersToBuild) {
       if (adapter.useCommands) {
         // Claude Code 使用 commands 模式
         buildClaudeCodePack(adapter, rootDir, commandsTemplateDir, examplesDir);
       } else {
-        // 其他适配器使用规则文件模式
-        const templateContent = readFile(templateFile);
-        if (!templateContent) {
-          console.error(`❌ 找不到模板文件: ${templateFile}`);
-          process.exit(1);
-        }
+        // 其他适配器使用 common-rules.md
         buildStandardPack(adapter, rootDir, templateContent, templatesDir, examplesDir);
       }
     }
@@ -212,5 +225,7 @@ export const buildAdaptersCommand = new Command('build-adapters')
       }
     }
 
-    console.log('\n提示: 现在推荐使用 npm 安装 @ccq/workflow 并运行 flowmem init');
+    console.log('\n数据源:');
+    console.log('  - Claude Code: templates/commands/*.md');
+    console.log('  - 其他 IDE: adapters/common-rules.md');
   });

@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(npm run build)",
-      "Bash(chmod:*)"
+      "Bash(chmod:*)",
+      "Bash(npm install)",
+      "Bash(node:*)"
     ]
   }
 }

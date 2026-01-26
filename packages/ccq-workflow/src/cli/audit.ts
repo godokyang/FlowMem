@@ -224,7 +224,6 @@ export const auditCommand = new Command('audit')
   .option('--sync', '只检查文件同步状态')
   .option('--all', '运行所有检查（默认）')
   .option('--path <path>', '指定检查路径', '.')
-  .option('--json', '输出 JSON 格式')
   .option('--fix', '尝试自动修复（仅限部分问题）')
   .action(async (options) => {
     if (!agentmemExists()) {
@@ -279,11 +278,6 @@ export const auditCommand = new Command('audit')
 
     // 输出结果
     console.log('');
-
-    if (options.json) {
-      console.log(JSON.stringify(results, null, 2));
-      return;
-    }
 
     // 分类统计
     const errors = results.filter(r => !r.passed && r.severity === 'error');

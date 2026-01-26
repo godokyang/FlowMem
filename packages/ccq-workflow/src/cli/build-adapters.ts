@@ -47,15 +47,12 @@ function copyDir(src: string, dest: string): void {
 }
 
 /**
- * 替换模板占位符
+ * 替换模板占位符（保留兼容性，但现在推荐使用 flowmem CLI）
  */
-function replaceTemplateVars(content: string, assetsDir: string): string {
-  return content
-    .replace(/\{\{SETUP_SCRIPT\}\}/g, `${assetsDir}/scripts/setup.sh`)
-    .replace(/\{\{TEMPLATE_DIR\}\}/g, `${assetsDir}/templates`)
-    .replace(/\{\{EXAMPLE_DIR\}\}/g, `${assetsDir}/examples`)
-    .replace(/\{\{SCRIPT_DIR\}\}/g, `${assetsDir}/scripts`)
-    .replace(/\{\{DOCS_DIR\}\}/g, `${assetsDir}/docs`);
+function replaceTemplateVars(content: string, _assetsDir: string): string {
+  // 现在 common-rules.md 不再使用占位符，直接返回内容
+  // 保留此函数以便将来扩展
+  return content;
 }
 
 /**
@@ -93,9 +90,6 @@ function buildStandardPack(
     copyDir(examplesDir, path.join(assetsPath, 'examples'));
     console.log('  ✓ 复制示例目录');
   }
-
-  // 创建 scripts 目录 (空的，因为现在用 Node.js CLI)
-  ensureDir(path.join(assetsPath, 'scripts'));
 
   // 生成规则文件
   const ruleContent = replaceTemplateVars(templateContent, adapter.assetsDir);

@@ -2,6 +2,7 @@
   "$schema": "https://code.claude.com/schemas/settings.json",
   "_comment": "FlowMem v2.8 Claude Code Hooks 配置示例",
   "_usage": "将此文件重命名为 settings.json 并放置在 .claude/ 目录下",
+  "_prerequisite": "需要先安装 @ccq/workflow: npm install -g @ccq/workflow",
   "hooks": {
     "PreToolUse": [
       {
@@ -9,12 +10,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".agentmem/scripts/flowmem-guard.sh check-protected \"$CLAUDE_FILE_PATH\"",
+            "command": "flowmem guard check-protected \"$CLAUDE_FILE_PATH\"",
             "_comment": "检查是否为保护文件（request.md/todolist.md/project.md）"
           },
           {
             "type": "command",
-            "command": ".agentmem/scripts/flowmem-guard.sh check-risk \"$CLAUDE_FILE_PATH\"",
+            "command": "flowmem guard check-risk \"$CLAUDE_FILE_PATH\"",
             "_comment": "检查高风险路径（auth/security/migrations 等）"
           }
         ]
@@ -24,12 +25,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".agentmem/scripts/flowmem-guard.sh check-protected \"$CLAUDE_FILE_PATH\"",
+            "command": "flowmem guard check-protected \"$CLAUDE_FILE_PATH\"",
             "_comment": "检查是否为保护文件"
           },
           {
             "type": "command",
-            "command": ".agentmem/scripts/flowmem-guard.sh check-risk \"$CLAUDE_FILE_PATH\"",
+            "command": "flowmem guard check-risk \"$CLAUDE_FILE_PATH\"",
             "_comment": "检查高风险路径"
           }
         ]
@@ -41,7 +42,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".agentmem/scripts/flowmem-guard.sh log-change \"$CLAUDE_FILE_PATH\" \"$CLAUDE_TOOL_NAME\"",
+            "command": "flowmem guard log-change \"$CLAUDE_FILE_PATH\" -o \"$CLAUDE_TOOL_NAME\"",
             "_comment": "记录变更到 trace.jsonl"
           }
         ]

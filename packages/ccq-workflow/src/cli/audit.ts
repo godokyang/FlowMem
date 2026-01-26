@@ -441,3 +441,166 @@ auditCommand
       }
     }
   });
+
+// dependency-check 子命令 - 检查 todolist 依赖关系
+auditCommand
+  .command('dependency-check')
+  .description('检查 todolist 依赖关系（循环依赖、缺失依赖）')
+  .option('--json', '输出 JSON 格式')
+  .action((options) => {
+    if (!agentmemExists()) {
+      console.error('❌ .agentmem 目录不存在。请先运行 flowmem init');
+      process.exit(1);
+    }
+
+    const todolistPath = path.join(getAgentmemPath(), 'todolist.md');
+    const content = readFile(todolistPath);
+
+    if (!content) {
+      console.log('✅ 无 todolist.md，跳过依赖检查');
+      return;
+    }
+
+    // 解析 todos 和依赖关系
+    const todoIds = new Set<string>();
+    const dependencies = new Map<string, string[]>();
+
+    // 匹配 TODO-XXX 格式
+    const todoMatches = content.matchAll(/TODO-[\w-]+/g);
+    for (const match of todoMatches) {
+      todoIds.add(match[0]);
+    }
+
+    // 匹配依赖关系 (dependencies: ["TODO-001", "TODO-002"])
+    const depMatches = content.matchAll(/(\bTODO-[\w-]+\b)[\s\S]*?dependencies:\s*\[(.*?)\]/g);
+    for (const match of depMatches) {
+      const todoId = match[1];
+      const deps = match[2].match(/TODO-[\w-]+/g) || [];
+      dependencies.set(todoId, deps);
+    }
+
+    const issues: { type: string; message: string }[] = [];
+
+    // 检查缺失依赖
+    for (const [todoId, deps] of dependencies) {
+      for (const dep of deps) {
+        if (!todoIds.has(dep)) {
+          issues.push({
+            type: 'missing',
+            message: `${todoId} 依赖不存在的任务: ${dep}`
+          });
+        }
+      }
+    }
+
+    // 检查循环依赖 (DFS)
+    const visited = new Set<string>();
+    const recursionStack = new Set<string>();
+
+    function hasCycle(todoId: string, path: string[] = []): string[] | null {
+      if (recursionStack.has(todoId)) {
+        return [...path, todoId];
+      }
+      if (visited.has(todoId)) {
+        return null;
+      }
+
+      visited.add(todoId);
+      recursionStack.add(todoId);
+
+      const deps = dependencies.get(todoId) || [];
+      for (const dep of deps) {
+        const cycle = hasCycle(dep, [...path, todoId]);
+        if (cycle) {
+          return cycle;
+        }
+      }
+
+      recursionStack.delete(todoId);
+      return null;
+    }
+
+    for (const todoId of dependencies.keys()) {
+      visited.clear();
+      recursionStack.clear();
+      const cycle = hasCycle(todoId);
+      if (cycle) {
+        issues.push({
+          type: 'cycle',
+          message: `循环依赖: ${cycle.join(' → ')}`
+        });
+        break; // 只报告第一个循环
+      }
+    }
+
+    if (options.json) {
+      console.log(JSON.stringify({
+        passed: issues.length === 0,
+        todoCount: todoIds.size,
+        dependencyCount: dependencies.size,
+        issues
+      }, null, 2));
+      return;
+    }
+
+    if (issues.length === 0) {
+      console.log(`✅ 依赖检查通过 (${todoIds.size} 个任务, ${dependencies.size} 个依赖关系)`);
+      return;
+    }
+
+    console.log(`❌ 发现 ${issues.length} 个依赖问题:\n`);
+    for (const issue of issues) {
+      console.log(`  [${issue.type}] ${issue.message}`);
+    }
+    process.exit(1);
+  });
+
+// pre-commit 子命令 - Git pre-commit hook 检查
+auditCommand
+  .command('pre-commit')
+  .description('Git pre-commit hook 检查')
+  .option('--json', '输出 JSON 格式')
+  .action((options) => {
+    const results: AuditResult[] = [];
+
+    // 1. 检查偷懒代码
+    const extensions = ['.ts', '.tsx', '.js', '.jsx', '.py', '.go', '.java'];
+    const files = scanFiles('.', extensions);
+
+    for (const file of files) {
+      const content = readFile(file);
+      if (content) {
+        results.push(...checkLazyCode(file, content));
+      }
+    }
+
+    // 2. 检查 todolist 完成情况（如果存在）
+    if (agentmemExists()) {
+      results.push(...checkTodoCompletion());
+      results.push(...checkSync());
+    }
+
+    const errors = results.filter(r => !r.passed && r.severity === 'error');
+
+    if (options.json) {
+      console.log(JSON.stringify({
+        passed: errors.length === 0,
+        results
+      }, null, 2));
+      if (errors.length > 0) {
+        process.exit(1);
+      }
+      return;
+    }
+
+    if (errors.length === 0) {
+      console.log('✅ Pre-commit 检查通过');
+      return;
+    }
+
+    console.log(`❌ Pre-commit 检查失败:\n`);
+    for (const error of errors) {
+      console.log(`  [${error.type}] ${error.message}`);
+    }
+    process.exit(1);
+  });

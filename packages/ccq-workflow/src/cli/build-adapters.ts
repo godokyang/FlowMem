@@ -13,6 +13,7 @@ interface AdapterConfig {
   ruleFile: string;
   assetsDir: string;
   specialStructure?: boolean;
+  useCommands?: boolean;  // 是否使用 commands 模式（Claude Code）
 }
 
 const ADAPTERS: AdapterConfig[] = [
@@ -22,7 +23,17 @@ const ADAPTERS: AdapterConfig[] = [
   { name: 'trae', ruleFile: '.trae/rules/context-memory.md', assetsDir: '.flowmem', specialStructure: true },
   { name: 'copilot', ruleFile: '.github/copilot-instructions.md', assetsDir: '.flowmem', specialStructure: true },
   { name: 'gemini', ruleFile: 'gemini-rules.md', assetsDir: '.flowmem' },
-  { name: 'claude-code', ruleFile: '.claude/skills/context-memory-system/SKILL.md', assetsDir: '.claude/skills/context-memory-system', specialStructure: true }
+  { name: 'claude-code', ruleFile: '', assetsDir: '.claude', specialStructure: true, useCommands: true }
+];
+
+// Claude Code 命令列表
+const CLAUDE_COMMANDS = [
+  'workflow',
+  'plan',
+  'execute',
+  'status',
+  'resume',
+  'audit'
 ];
 
 /**
@@ -53,6 +64,54 @@ function replaceTemplateVars(content: string, _assetsDir: string): string {
   // 现在 common-rules.md 不再使用占位符，直接返回内容
   // 保留此函数以便将来扩展
   return content;
+}
+
+/**
+ * 构建 Claude Code 适配器包（commands 模式）
+ */
+function buildClaudeCodePack(
+  adapter: AdapterConfig,
+  rootDir: string,
+  commandsTemplateDir: string,
+  examplesDir: string
+): void {
+  const packDir = path.join(rootDir, 'adapters', adapter.name);
+
+  // 清理旧目录
+  if (fs.existsSync(packDir)) {
+    fs.rmSync(packDir, { recursive: true });
+  }
+
+  ensureDir(packDir);
+
+  console.log(`📦 构建 ${adapter.name} 包（commands 模式）...`);
+
+  // 创建 .claude/commands/flowmem/ 目录
+  const commandsDir = path.join(packDir, '.claude', 'commands', 'flowmem');
+  ensureDir(commandsDir);
+
+  // 复制命令模板
+  for (const cmd of CLAUDE_COMMANDS) {
+    const srcFile = path.join(commandsTemplateDir, `${cmd}.md`);
+    const destFile = path.join(commandsDir, `${cmd}.md`);
+
+    if (fs.existsSync(srcFile)) {
+      fs.copyFileSync(srcFile, destFile);
+      console.log(`  ✓ 复制命令: /flowmem:${cmd}`);
+    } else {
+      console.log(`  ⚠ 命令模板不存在: ${cmd}.md`);
+    }
+  }
+
+  // 复制 hooks 配置示例
+  const hooksExample = path.join(examplesDir, 'claude-hooks-settings.json');
+  if (fs.existsSync(hooksExample)) {
+    const claudeDir = path.join(packDir, '.claude');
+    fs.copyFileSync(hooksExample, path.join(claudeDir, 'settings.example.json'));
+    console.log('  ✓ 复制 hooks 配置示例');
+  }
+
+  console.log(`  ✓ 生成 ${CLAUDE_COMMANDS.length} 个命令`);
 }
 
 /**
@@ -98,29 +157,7 @@ function buildStandardPack(
   // 确保规则文件目录存在
   ensureDir(path.dirname(ruleFilePath));
 
-  // Claude Code 需要添加 YAML frontmatter
-  if (adapter.name === 'claude-code') {
-    const frontmatter = `---
-name: context-memory-system
-description: FlowMem 上下文记忆系统 v2.8。支持四阶段工作流、多 Agent 架构、偷懒检测与 Claude Code Hooks。
-autorun: true
----
-
-`;
-    writeFile(ruleFilePath, frontmatter + ruleContent);
-
-    // 复制 hooks 配置示例
-    const hooksExample = path.join(examplesDir, 'claude-hooks-settings.json');
-    if (fs.existsSync(hooksExample)) {
-      const claudeDir = path.join(packDir, '.claude');
-      ensureDir(claudeDir);
-      fs.copyFileSync(hooksExample, path.join(claudeDir, 'settings.example.json'));
-      console.log('  ✓ 复制 hooks 配置示例');
-    }
-  } else {
-    writeFile(ruleFilePath, ruleContent);
-  }
-
+  writeFile(ruleFilePath, ruleContent);
   console.log(`  ✓ 生成规则: ${adapter.ruleFile}`);
 }
 
@@ -134,17 +171,10 @@ export const buildAdaptersCommand = new Command('build-adapters')
     const adaptersDir = path.join(rootDir, 'adapters');
     const templateFile = path.join(adaptersDir, 'common-rules.md');
     const templatesDir = path.join(rootDir, 'templates');
+    const commandsTemplateDir = path.join(templatesDir, 'commands');
     const examplesDir = path.join(rootDir, 'examples');
 
-    // 检查模板文件
-    const templateContent = readFile(templateFile);
-    if (!templateContent) {
-      console.error(`❌ 找不到模板文件: ${templateFile}`);
-      process.exit(1);
-    }
-
     console.log('🚀 构建 FlowMem v2.8 适配器包...\n');
-    console.log(`模板文件: ${templateFile}`);
     console.log(`输出目录: ${adaptersDir}\n`);
 
     // 构建适配器
@@ -158,13 +188,28 @@ export const buildAdaptersCommand = new Command('build-adapters')
     }
 
     for (const adapter of adaptersToBuild) {
-      buildStandardPack(adapter, rootDir, templateContent, templatesDir, examplesDir);
+      if (adapter.useCommands) {
+        // Claude Code 使用 commands 模式
+        buildClaudeCodePack(adapter, rootDir, commandsTemplateDir, examplesDir);
+      } else {
+        // 其他适配器使用规则文件模式
+        const templateContent = readFile(templateFile);
+        if (!templateContent) {
+          console.error(`❌ 找不到模板文件: ${templateFile}`);
+          process.exit(1);
+        }
+        buildStandardPack(adapter, rootDir, templateContent, templatesDir, examplesDir);
+      }
     }
 
     console.log('\n🎉 适配器构建完成！\n');
     console.log('已生成的适配器包:');
     for (const adapter of adaptersToBuild) {
-      console.log(`  - ${adapter.name}/ (${adapter.ruleFile})`);
+      if (adapter.useCommands) {
+        console.log(`  - ${adapter.name}/ (commands 模式: /flowmem:*)`);
+      } else {
+        console.log(`  - ${adapter.name}/ (${adapter.ruleFile})`);
+      }
     }
 
     console.log('\n提示: 现在推荐使用 npm 安装 @ccq/workflow 并运行 flowmem init');

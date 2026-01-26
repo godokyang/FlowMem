@@ -18,8 +18,8 @@ function getPackageRoot(): string {
 // 适配器配置
 const ADAPTERS: Record<string, { description: string; files: string[] }> = {
   'claude-code': {
-    description: 'Claude Code CLI',
-    files: ['.claude']
+    description: 'Claude Code CLI (commands 模式)',
+    files: ['.claude']  // 包含 commands/flowmem/ 和 settings.example.json
   },
   'cursor': {
     description: 'Cursor IDE',
@@ -224,8 +224,9 @@ _暂无记录_
 
 /**
  * 递归复制目录或文件
+ * 跳过 settings.example.json（由专门的合并逻辑处理）
  */
-function copyRecursive(src: string, dest: string, force: boolean): boolean {
+function copyRecursive(src: string, dest: string, force: boolean, skipSettings = false): boolean {
   const stat = fs.statSync(src);
 
   if (stat.isDirectory()) {
@@ -236,7 +237,11 @@ function copyRecursive(src: string, dest: string, force: boolean): boolean {
     ensureDir(dest);
     const files = fs.readdirSync(src);
     for (const file of files) {
-      copyRecursive(path.join(src, file), path.join(dest, file), force);
+      // 跳过 settings.example.json
+      if (skipSettings && file === 'settings.example.json') {
+        continue;
+      }
+      copyRecursive(path.join(src, file), path.join(dest, file), force, skipSettings);
     }
     return true;
   } else {
@@ -246,6 +251,101 @@ function copyRecursive(src: string, dest: string, force: boolean): boolean {
     }
     fs.copyFileSync(src, dest);
     return true;
+  }
+}
+
+/**
+ * 深度合并两个对象
+ */
+function deepMerge(target: Record<string, unknown>, source: Record<string, unknown>): Record<string, unknown> {
+  const result = { ...target };
+
+  for (const key of Object.keys(source)) {
+    if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
+      if (target[key] && typeof target[key] === 'object' && !Array.isArray(target[key])) {
+        result[key] = deepMerge(target[key] as Record<string, unknown>, source[key] as Record<string, unknown>);
+      } else {
+        result[key] = source[key];
+      }
+    } else if (Array.isArray(source[key])) {
+      // 数组合并：追加不重复的项
+      if (Array.isArray(target[key])) {
+        const targetArr = target[key] as unknown[];
+        const sourceArr = source[key] as unknown[];
+        result[key] = [...targetArr, ...sourceArr.filter(item =>
+          !targetArr.some(t => JSON.stringify(t) === JSON.stringify(item))
+        )];
+      } else {
+        result[key] = source[key];
+      }
+    } else {
+      result[key] = source[key];
+    }
+  }
+
+  return result;
+}
+
+/**
+ * 合并 Claude Code settings.json
+ */
+function mergeClaudeSettings(cwd: string, adapterPath: string): void {
+  const settingsPath = path.join(cwd, '.claude', 'settings.json');
+  const examplePath = path.join(adapterPath, '.claude', 'settings.example.json');
+
+  if (!fs.existsSync(examplePath)) {
+    return;
+  }
+
+  // 读取示例配置
+  const exampleContent = fs.readFileSync(examplePath, 'utf-8');
+  const exampleConfig = JSON.parse(exampleContent);
+
+  // 移除注释字段
+  delete exampleConfig._comment;
+  delete exampleConfig._usage;
+  delete exampleConfig._prerequisite;
+
+  // 递归移除 hooks 中的 _comment
+  if (exampleConfig.hooks) {
+    for (const hookType of Object.keys(exampleConfig.hooks)) {
+      if (Array.isArray(exampleConfig.hooks[hookType])) {
+        for (const hook of exampleConfig.hooks[hookType]) {
+          delete hook._comment;
+          if (hook.hooks && Array.isArray(hook.hooks)) {
+            for (const subHook of hook.hooks) {
+              delete subHook._comment;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (fs.existsSync(settingsPath)) {
+    // 已存在 settings.json，合并配置
+    try {
+      const existingContent = fs.readFileSync(settingsPath, 'utf-8');
+      const existingConfig = JSON.parse(existingContent);
+
+      // 合并 hooks
+      const mergedConfig = deepMerge(existingConfig, exampleConfig);
+
+      fs.writeFileSync(settingsPath, JSON.stringify(mergedConfig, null, 2), 'utf-8');
+      console.log('✅ 合并 hooks 配置到 .claude/settings.json');
+    } catch (e) {
+      console.log(`⚠️  合并 settings.json 失败: ${e}`);
+      // 备份原文件并写入新配置
+      const backupPath = settingsPath + '.backup';
+      fs.copyFileSync(settingsPath, backupPath);
+      fs.writeFileSync(settingsPath, JSON.stringify(exampleConfig, null, 2), 'utf-8');
+      console.log(`⚠️  已备份原配置到 ${backupPath}`);
+    }
+  } else {
+    // 不存在 settings.json，直接创建
+    ensureDir(path.dirname(settingsPath));
+    fs.writeFileSync(settingsPath, JSON.stringify(exampleConfig, null, 2), 'utf-8');
+    console.log('✅ 创建 .claude/settings.json');
   }
 }
 
@@ -268,6 +368,9 @@ function installAdapter(adapterName: string, cwd: string, force: boolean): boole
 
   console.log(`\n📦 安装适配器: ${adapterName} (${adapter.description})`);
 
+  // Claude Code 特殊处理
+  const isClaudeCode = adapterName === 'claude-code';
+
   for (const file of adapter.files) {
     const srcPath = path.join(adapterPath, file);
     const destPath = path.join(cwd, file);
@@ -277,13 +380,23 @@ function installAdapter(adapterName: string, cwd: string, force: boolean): boole
       continue;
     }
 
-    if (fs.existsSync(destPath) && !force) {
-      console.log(`⏭️  跳过已存在: ${file}`);
-      continue;
-    }
+    // Claude Code 的 .claude 目录需要特殊处理
+    if (isClaudeCode && file === '.claude') {
+      // 复制 commands 目录（跳过 settings.example.json）
+      copyRecursive(srcPath, destPath, force, true);
+      console.log(`✅ 复制: ${file}/commands/flowmem/`);
 
-    copyRecursive(srcPath, destPath, force);
-    console.log(`✅ 复制: ${file}`);
+      // 合并 settings.json
+      mergeClaudeSettings(cwd, adapterPath);
+    } else {
+      if (fs.existsSync(destPath) && !force) {
+        console.log(`⏭️  跳过已存在: ${file}`);
+        continue;
+      }
+
+      copyRecursive(srcPath, destPath, force);
+      console.log(`✅ 复制: ${file}`);
+    }
   }
 
   return true;

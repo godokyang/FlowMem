@@ -1,6 +1,0 @@
-<flowmem version="2.0.0">
-  <projectRoot>{{projectRoot}}</projectRoot>
-  <config>
-    {{flowMemConfig}}
-  </config>
-</flowmem>

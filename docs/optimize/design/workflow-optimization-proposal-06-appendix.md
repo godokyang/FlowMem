@@ -336,12 +336,16 @@ A: 可以。用户可以输入 `/skip` 跳过当前阶段，但会记录跳过�
 
 A: Subagent 拥有独立的上下文窗口，与主会话隔离。好处是：
 - 避免上下文污染
-- flowmem-reviewer 不会受 flowmem-coder 影响
+- flowmem-reviewer 不会受 Orchestrator 影响
 - 可以使用不同的模型
 
-**Q: 为什么 flowmem-reviewer 要独立于 flowmem-coder？**
+**Q: 为什么 flowmem-reviewer 要独立于 Orchestrator？**
 
 A: 如果同一个 Agent 既写代码又审核，容易产生"自我一致性偏见"——倾向于认可自己刚写的代码。独立的 flowmem-reviewer 可以更客观地发现问题。
+
+**Q: 为什么代码实现由 Orchestrator 直接完成？**
+
+A: 为了保证完整的上下文传递。Orchestrator 已有检索结果和任务上下文，可以随时补充检索，无需通过文件传递上下文给子代理，避免信息丢失。
 
 **Q: Context Curator 什么时候触发？**
 

@@ -89,7 +89,7 @@ release_lock() {
 | flowmem-solver | `.agentmem/plan.md` | 方案描述 + 技术选型 |
 | flowmem-critic | `.agentmem/review.md` | 通过/拒绝 + 问题清单 |
 | flowmem-planner | `.agentmem/todolist.md` | YAML frontmatter + 任务列表 |
-| flowmem-coder | 直接修改代码文件 | 遵循项目规范 |
+| Orchestrator | 直接修改代码文件 | 遵循项目规范 |
 | flowmem-reviewer | `.agentmem/logs/review-<todo-id>.md` | 审核结论 + 详细反馈 |
 
 ---

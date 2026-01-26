@@ -30,18 +30,23 @@
 | 方案质量 | ❌ 一次生成，无审核 | ✅ Solver + Critic 迭代打磨 |
 | 上下文污染 | ❌ 共享上下文 | ✅ Subagent 独立上下文 |
 
-**Agent 清单（7 个子代理 + 1 个编排者）**:
+**Agent 清单（5 个子代理 + 1 个编排者）**:
 
 | Agent | 子代理名称 | 职责 | 调用时机 | 工具权限 |
 |-------|------------|------|----------|----------|
-| **Orchestrator** | （主会话） | 流程控制、状态管理、用户交互 | 全程 | 全部 |
+| **Orchestrator** | （主会话） | 流程控制、状态管理、用户交互、**代码实现** | 全程 | 全部 |
 | **Analyst** | `flowmem-analyst` | 需求分析、完整性评分、追问 | Phase 1.2 | 只读 |
 | **Solver** | `flowmem-solver` | 方案设计 | Phase 1.3 | 只读 |
 | **Critic** | `flowmem-critic` | 方案审核、找问题 | Phase 1.3 | 只读 |
 | **Planner** | `flowmem-planner` | 任务分解、WBS、依赖分析 | Phase 2 | 只读 |
-| **Coder** | `flowmem-coder` | 代码实现 | Phase 3 | 读写 |
 | **Reviewer** | `flowmem-reviewer` | 代码审核、质量把关 | Phase 3 | 只读 |
 | **Context Curator** | `flowmem-context-curator` | 上下文打包（可选） | Phase 1.1 | 只读 |
+
+> **架构决策**：代码实现由 Orchestrator 直接完成，不委托给子代理。原因：
+> - 保证完整的上下文传递，避免信息丢失
+> - Orchestrator 已有检索结果和任务上下文
+> - 可随时补充检索，无需通过文件传递
+> - 审核由独立的 flowmem-reviewer 完成，保证客观性
 
 **子代理配置格式**（Claude Code 官方 YAML 前置元数据）:
 
@@ -60,6 +65,7 @@ model: sonnet
 
 **约束**:
 - Orchestrator 留在主会话，不作为独立子代理。
+- Orchestrator 负责代码实现，保证上下文完整性。
 - 子代理通过 `.agentmem/*` 文件交接产出。
 - 只读子代理禁止使用 Write/Edit/Bash 工具。
 

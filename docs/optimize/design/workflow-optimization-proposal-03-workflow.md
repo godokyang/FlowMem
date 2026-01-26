@@ -373,8 +373,8 @@ for each todo in todolist:
     ├─ 1. 检索上下文 (工具内置优先 / ccq-engine 可选)
     │      context = search_context(todo.content)
     │
-    ├─ 2. 执行任务 (flowmem-coder)
-    │      changes = coderImplement(todo, context)
+    ├─ 2. 执行任务 (Orchestrator 直接实现)
+    │      changes = orchestratorImplement(todo, context)
     │
     ├─ 3. 自动审核 (flowmem-reviewer)
     │      result = reviewerReview(changes, todo.acceptance)
@@ -396,13 +396,13 @@ retry_with_strategy():
     ├─ 重试次数 < 2?
     │   │
     │   ├─ 第 1 次重试
-    │   │   ├─ 将 flowmem-reviewer 反馈传递给 flowmem-coder
-    │   │   ├─ flowmem-coder 根据反馈修改代码
+    │   │   ├─ 将 flowmem-reviewer 反馈传递给 Orchestrator
+    │   │   ├─ Orchestrator 根据反馈修改代码
     │   │   └─ 重新提交 flowmem-reviewer 审核
     │   │
     │   └─ 第 2 次重试
     │       ├─ 重新检索上下文（扩大范围 topK * 1.5）
-    │       ├─ flowmem-coder 基于新上下文重新实现
+    │       ├─ Orchestrator 基于新上下文重新实现
     │       └─ 重新提交 flowmem-reviewer 审核
     │
     └─ 重试次数 >= 2?
@@ -639,7 +639,7 @@ npm run build     # 构建检查
 {
   "timestamp": "2026-01-22T10:30:00Z",
   "type": "agent_timeout",
-  "agent": "flowmem-coder",
+  "agent": "Orchestrator",
   "todo_id": "TODO-003",
   "details": {
     "timeout_seconds": 60,

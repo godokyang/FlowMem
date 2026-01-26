@@ -36,17 +36,18 @@ flowmem init
     │   ├── status.md             # 查看状态
     │   └── audit.md              # 审核检查
     │
-    ├── agents/                   # 7 个子代理
+    ├── agents/                   # 5 个子代理
     │   ├── flowmem-analyst.md    # 需求分析
     │   ├── flowmem-solver.md     # 方案设计
     │   ├── flowmem-critic.md     # 方案审核
     │   ├── flowmem-planner.md    # 任务分解
-    │   ├── flowmem-coder.md      # 代码实现
     │   ├── flowmem-reviewer.md   # 代码审核
     │   └── flowmem-context-curator.md  # 上下文打包
     │
     └── settings.json             # hooks 配置（合并到现有配置）
 ```
+
+> **注意**：代码实现由 Orchestrator 直接完成，不需要 flowmem-coder 子代理。这样可以保证完整的上下文传递，避免信息丢失。
 
 ### 子代理（Subagent）配置
 
@@ -71,7 +72,6 @@ model: sonnet
 | `description` | Claude 根据此字段决定何时委托 | 包含"主动使用"触发自动委托 |
 | `tools` | 子代理可用的工具 | `Read, Grep, Glob` |
 | `model` | 使用的模型 | `sonnet` / `opus` / `haiku` / `inherit` |
-| `permissionMode` | 权限模式 | `acceptEdits`（仅 Coder 使用） |
 
 **子代理权限隔离**：
 
@@ -81,9 +81,10 @@ model: sonnet
 | flowmem-solver | Read, Grep, Glob | default |
 | flowmem-critic | Read, Grep, Glob | default |
 | flowmem-planner | Read, Grep, Glob | default |
-| flowmem-coder | Read, Edit, Write, Bash, Grep, Glob | acceptEdits |
 | flowmem-reviewer | Read, Grep, Glob | default |
 | flowmem-context-curator | Read, Grep, Glob | default |
+
+> **注意**：所有子代理都是只读的。代码实现由 Orchestrator（主会话）直接完成，拥有完整的读写权限。
 
 ### 自动委托机制
 

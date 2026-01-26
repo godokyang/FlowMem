@@ -39,7 +39,7 @@ description: 'FlowMem 四阶段工作流 - 需求澄清→详细规划→执行�
 
 ## 子代理（Subagent）
 
-本工作流配置了 7 个专业子代理，Claude 会根据任务自动委托：
+本工作流配置了 5 个专业子代理，Claude 会根据任务自动委托：
 
 | 子代理 | 职责 | 调用时机 | 工具权限 |
 |--------|------|----------|----------|
@@ -47,8 +47,9 @@ description: 'FlowMem 四阶段工作流 - 需求澄清→详细规划→执行�
 | **flowmem-solver** | 方案设计 | Phase 1.3 | 只读 |
 | **flowmem-critic** | 方案审核 | Phase 1.3 | 只读 |
 | **flowmem-planner** | 任务分解、WBS | Phase 2 | 只读 |
-| **flowmem-coder** | 代码实现 | Phase 3 | 读写 |
 | **flowmem-reviewer** | 代码审核 | Phase 3 | 只读 |
+
+> **注意**：代码实现由 Orchestrator 直接完成，不委托给子代理。这样可以保证完整的上下文传递，避免信息丢失。审核必须由独立的 flowmem-reviewer 完成，确保客观性。
 
 **自动委托机制**：Claude 根据子代理的 `description` 字段自动决定何时委托任务。你可以明确请求使用特定子代理：
 
@@ -89,10 +90,15 @@ description: 'FlowMem 四阶段工作流 - 需求澄清→详细规划→执行�
 `[模式：执行]` - 代码开发：
 
 **单步执行原则**：
-1. 委托给 flowmem-coder 实现 1 个 Todo
-2. 委托给 flowmem-reviewer 审核代码
+1. **Orchestrator 直接实现** 1 个 Todo（保证完整上下文）
+2. 委托给 flowmem-reviewer 审核代码（独立上下文，客观审核）
 3. 审核通过 → `flowmem todo set --status completed` → 下一个
-4. 审核不通过 → 重做，最多 2 次
+4. 审核不通过 → Orchestrator 根据反馈修改，最多 2 次
+
+**为什么 Orchestrator 直接写代码**：
+- 已有完整的任务上下文和检索结果
+- 可以随时补充检索，无信息丢失
+- 审核由独立 subagent 完成，保证客观性
 
 **偷懒检测**（以下模式必须拒绝）：
 - `console.log('TODO')`

@@ -61,13 +61,12 @@ function copyDir(src: string, dest: string): void {
   }
 }
 
-// Claude Code Agent 列表
+// Claude Code Agent 列表（代码实现由 Orchestrator 直接完成，不需要 coder agent）
 const CLAUDE_AGENTS = [
   'analyst',
   'solver',
   'critic',
   'planner',
-  'coder',
   'reviewer',
   'context-curator'
 ];

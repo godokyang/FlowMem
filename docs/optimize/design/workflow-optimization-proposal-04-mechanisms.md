@@ -30,6 +30,68 @@
 **可选细化层**:
 - 复杂任务可增加 `.agentmem/implementation/`，作为详细实施方案与伪代码的载体。
 
+### 文件交接规范
+
+#### 文件格式统一
+
+所有 Subagent 交接文件必须遵循以下格式：
+
+```yaml
+---
+# YAML frontmatter（必须）
+created_at: "2026-01-22T10:30:00Z"
+created_by: "Solver"  # Agent 名称
+version: 1
+type: "plan" | "review" | "context" | "report"
+---
+
+# Markdown body（必须）
+[具体内容]
+```
+
+#### 文件大小限制
+
+| 文件类型 | 最大行数 | 超限处理 |
+|----------|----------|----------|
+| request.md | 300 行 | 拆分为 request.md + request-details.md |
+| todolist.md | 500 行 | 按模块拆分为 todolist-<module>.md |
+| context.md | 500 行 | 压缩摘要或拆分为多个 context-<topic>.md |
+| 审核报告 | 200 行 | 仅保留关键结论，详情存入 logs/ |
+
+#### 并发写入控制
+
+为避免多个 Subagent 同时写入同一文件导致冲突：
+
+```bash
+# 写入前获取锁
+acquire_lock() {
+  LOCK_FILE=".agentmem/.lock"
+  while ! mkdir "$LOCK_FILE" 2>/dev/null; do
+    sleep 0.1
+  done
+}
+
+# 写入后释放锁
+release_lock() {
+  rmdir ".agentmem/.lock" 2>/dev/null
+}
+```
+
+**锁超时机制**:
+- 锁持有超过 30 秒自动释放
+- 锁文件包含持有者信息：`.agentmem/.lock/holder`
+
+#### Subagent 输出约定
+
+| Agent | 输出文件 | 格式要求 |
+|-------|----------|----------|
+| Analyst | `.agentmem/analysis.md` | 评分 + 问题清单 |
+| Solver | `.agentmem/plan.md` | 方案描述 + 技术选型 |
+| Critic | `.agentmem/review.md` | 通过/拒绝 + 问题清单 |
+| Planner | `.agentmem/todolist.md` | YAML frontmatter + 任务列表 |
+| Coder | 直接修改代码文件 | 遵循项目规范 |
+| Reviewer | `.agentmem/logs/review-<todo-id>.md` | 审核结论 + 详细反馈 |
+
 ---
 
 ## 4.3 审计留痕与可追溯性
@@ -134,34 +196,109 @@ flowmem audit pre-commit || exit 1
 3. Post-Tool 留痕（trace.jsonl + 变更摘要）。
 4. Pre-Session 规则加载校验（核心记忆文件存在性）。
 
-**伪配置（示意，事件名以 Claude Code hooks guide 为准）**:
+**实际配置（Claude Code hooks 格式）**:
 
-```yaml
-hooks:
-  pre_message:
-    - id: require_core_mem
-      when: missing_files(".agentmem/request.md", ".agentmem/todolist.md")
-      action: block
-      message: "先补齐 request.md / todolist.md"
-  pre_tool:
-    - id: protect_agentmem
-      when: path_matches(".agentmem/request.md|.agentmem/todolist.md|.agentmem/project.md")
-      action: block
-      message: "保护文件禁止直接修改"
-    - id: high_risk_requires_review
-      when: path_matches_from_project_high_risk() && !reviewer_passed()
-      action: block
-      message: "高风险变更需 Reviewer 通过"
-  post_tool:
-    - id: append_trace
-      when: tool_is_write_or_edit()
-      action: log
-      target: ".agentmem/logs/trace.jsonl"
-  pre_response:
-    - id: require_test_note
-      when: touched_high_risk() && !test_note_present()
-      action: warn
-      message: "请补充测试计划或说明未运行原因"
+Claude Code hooks 基于 shell 命令执行，需配套实现 `flowmem guard` CLI 工具。
+
+```json
+// .claude/settings.json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "flowmem guard check-protected \"$CLAUDE_FILE_PATH\""
+          }
+        ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "flowmem guard check-risk \"$CLAUDE_FILE_PATH\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "flowmem guard log-change \"$CLAUDE_FILE_PATH\" \"$CLAUDE_TOOL_NAME\""
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+**flowmem guard CLI 命令说明**:
+
+| 命令 | 功能 | 退出码 |
+|------|------|--------|
+| `flowmem guard check-protected <path>` | 检查是否为保护文件 | 0=允许, 1=拦截 |
+| `flowmem guard check-risk <path>` | 检查高风险路径 | 0=允许, 1=拦截(需确认), 2=警告 |
+| `flowmem guard log-change <path> <tool>` | 记录变更到 trace.jsonl | 始终 0 |
+| `flowmem guard check-core-mem` | 检查核心记忆文件是否存在 | 0=存在, 1=缺失 |
+
+**check-protected 实现逻辑**:
+
+```bash
+#!/bin/bash
+# flowmem guard check-protected
+PROTECTED_FILES=(
+  ".agentmem/request.md"
+  ".agentmem/todolist.md"
+  ".agentmem/project.md"
+)
+
+for protected in "${PROTECTED_FILES[@]}"; do
+  if [[ "$1" == *"$protected"* ]]; then
+    echo "BLOCKED: 保护文件 $protected 禁止直接修改，请通过 Orchestrator 更新"
+    exit 1
+  fi
+done
+exit 0
+```
+
+**check-risk 实现逻辑**:
+
+```bash
+#!/bin/bash
+# flowmem guard check-risk
+# 从 .agentmem/project.md 读取高风险路径，或使用默认值
+HIGH_RISK_PATHS=(
+  "auth/" "security/" "migrations/" "db/"
+  "infra/" ".github/workflows/" ".env"
+)
+
+for risk_path in "${HIGH_RISK_PATHS[@]}"; do
+  if [[ "$1" == *"$risk_path"* ]]; then
+    # 检查是否有 Reviewer 通过标记
+    if [[ ! -f ".agentmem/.reviewer_approved" ]]; then
+      echo "BLOCKED: 高风险路径 $risk_path 需要 Reviewer 审核通过"
+      exit 1
+    fi
+  fi
+done
+exit 0
+```
+
+**log-change 实现逻辑**:
+
+```bash
+#!/bin/bash
+# flowmem guard log-change
+mkdir -p .agentmem/logs
+echo "{\"timestamp\":\"$(date -Iseconds)\",\"tool\":\"$2\",\"path\":\"$1\"}" >> .agentmem/logs/trace.jsonl
+exit 0
 ```
 
 ---

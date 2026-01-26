@@ -38,9 +38,37 @@
 - 引入 Claude Code hooks 作为 AI 行为门禁（写入拦截/质量门禁/留痕）。
 - 借鉴 OMC 的 skills 分层、模板继承、升级信号、notepad 机制，但保持独立实现。
 
-## 4. 术语
+## 4. 术语表
 
-- **默认模型/LLM**: 工具或平台的默认模型能力（如 Claude Code 内置模型）。
-- **Agent**: 明确职责的角色（Analyst/Solver/Critic/Planner/Coder/Reviewer）。
-- **Subagent**: Claude Code 子代理，独立上下文窗口与独立 loop。
-- **Orchestrator**: 主会话协调者，推进阶段并校验产出。
+> 本文档统一使用英文术语，避免中英混用导致的歧义。
+
+| 术语 | 定义 | 备注 |
+|------|------|------|
+| **Agent** | 具有明确职责的 AI 角色，负责特定任务 | 如 Analyst、Solver、Coder 等 |
+| **Subagent** | Claude Code 子代理，拥有独立上下文窗口和执行循环 | 与主会话隔离，通过文件交接 |
+| **Orchestrator** | 主会话协调者，负责阶段推进和产出校验 | 不作为独立 Subagent 存在 |
+| **Phase** | 工作流阶段 | Phase 1-4 对应需求澄清到交付 |
+| **Todo** | 单个可执行任务项 | 存储在 todolist.md 中 |
+| **Acceptance** | 验收条件 | 每个 Todo 的完成标准 |
+| **Context Curator** | 上下文打包 Agent | 负责压缩和整理检索结果 |
+| **Reviewer** | 代码审核 Agent | 检查代码质量和偷懒行为 |
+| **Critic** | 方案审核 Agent | 检查技术方案的可行性 |
+| **Hook** | Claude Code 钩子 | 在特定事件触发时执行的脚本 |
+| **ccq-engine** | 可选的检索增强引擎 | 用于大仓库或跨会话场景 |
+
+### 术语使用规范
+
+1. **Agent 相关**
+   - 使用 "Agent" 而非 "角色" 或 "代理"
+   - 使用 "Subagent" 而非 "子代理" 或 "子 Agent"
+   - Agent 名称首字母大写：Analyst, Solver, Critic, Planner, Coder, Reviewer
+
+2. **流程相关**
+   - 使用 "Phase" 而非 "阶段"（在正式描述中）
+   - 使用 "Todo" 而非 "任务项" 或 "待办"
+   - 使用 "Acceptance" 而非 "验收条件"（在代码/配置中）
+
+3. **文件相关**
+   - 使用 `.agentmem/` 而非 "记忆目录"
+   - 使用 `request.md` 而非 "需求文档"
+   - 使用 `todolist.md` 而非 "任务清单"

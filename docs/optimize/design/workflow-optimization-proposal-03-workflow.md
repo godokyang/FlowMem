@@ -14,22 +14,22 @@
 │  Phase 1: 需求澄清                    输出: request.md          │
 │  ───────────────────                  ─────────────────         │
 │  🔵 1.1 上下文检索 (工具内置优先 / ccq-engine 可选)             │
-│  🔵 1.2 需求完整性评分 (Analyst Subagent)                       │
+│  🔵 1.2 需求完整性评分 (flowmem-analyst)                        │
 │     └─ 🟡 <7分则追问用户补充信息                                │
-│  🔵 1.3 方案迭代 (Solver + Critic Subagent，最多 2 轮)          │
+│  🔵 1.3 方案迭代 (flowmem-solver + flowmem-critic，最多 2 轮)   │
 │  🟡 1.4 用户确认方案 → 生成 request.md                          │
 │                                                                 │
 │  Phase 2: 详细规划                    输出: todolist.md         │
 │  ───────────────────                  ─────────────────         │
 │  🔵 2.0 实施细化 (implementation 目录，可选)                    │
-│  🔵 2.1 WBS 任务分解 (Planner Subagent)                          │
+│  🔵 2.1 WBS 任务分解 (flowmem-planner)                           │
 │  🔵 2.2 依赖识别 + 工作量估算 (任务点)                           │
 │  🟡 2.3 用户确认 → 生成 todolist.md                             │
 │                                                                 │
 │  Phase 3: 执行与审核                  默认无需用户介入           │
 │  ────────────────────                 ────────────────          │
-│  🔵 3.1 单步执行 (Coder Subagent，每次1个Todo)                    │
-│  🔵 3.2 自动审核 (Reviewer Subagent)                             │
+│  🔵 3.1 单步执行 (flowmem-coder，每次1个Todo)                     │
+│  🔵 3.2 自动审核 (flowmem-reviewer)                               │
 │  🔵 3.3 审核不通过 → 自动重做                                   │
 │  🔵 3.4 更新 todolist.md 状态 (使用 flowmem todo CLI)           │
 │                                                                 │
@@ -43,7 +43,7 @@
 ```
 
 **固定介入点**: 方案确认 + 规划确认（2 次）
-**可变介入点**: 需求评分追问、实施细化确认（复杂任务/用户要求时）、中途需求变更、Reviewer 无法自动修复、高风险变更或测试不可跑时
+**可变介入点**: 需求评分追问、实施细化确认（复杂任务/用户要求时）、中途需求变更、flowmem-reviewer 无法自动修复、高风险变更或测试不可跑时
 
 > 💡 用户可随时介入调整需求或方向，系统不应限制介入次数。
 > 上述流程是"最小介入路径"，不是"唯一路径"。
@@ -87,12 +87,12 @@ Phase 6: 评审           ───→    Phase 4: 交付
 **极简路径流程**:
 
 ```
-用户需求 → Orchestrator 快速评估 → 直接生成 request.md + todolist.md → Coder 执行 → Reviewer 审核 → 完成
+用户需求 → Orchestrator 快速评估 → 直接生成 request.md + todolist.md → flowmem-coder 执行 → flowmem-reviewer 审核 → 完成
 ```
 
 **跳过的步骤**:
-- ❌ Analyst 需求评分
-- ❌ Solver + Critic 方案迭代
+- ❌ flowmem-analyst 需求评分
+- ❌ flowmem-solver + flowmem-critic 方案迭代
 - ❌ 用户方案确认（仅在执行后确认结果）
 
 **极简路径的 request.md 模板**:
@@ -118,8 +118,8 @@ completeness_score: auto
 ```
 
 **安全兜底**:
-- 极简路径的 Reviewer 审核**不可跳过**
-- 若 Reviewer 发现问题复杂度超出预期，自动升级到简化路径或完整路径
+- 极简路径的 flowmem-reviewer 审核**不可跳过**
+- 若 flowmem-reviewer 发现问题复杂度超出预期，自动升级到简化路径或完整路径
 
 ---
 
@@ -139,7 +139,7 @@ completeness_score: auto
 const context = await tool.search_context({ query: userRequest, topK: 15 });
 // 可选：ccq-engine 用于大仓库或跨会话稳定检索
 // const context = await ccqEngine.retrieve(userRequest, { topK: 15 });
-// 检索结果提供给 Agent 系统（Analyst/Solver）分析
+// 检索结果提供给 Agent 系统（flowmem-analyst/flowmem-solver）分析
 ```
 
 #### 步骤 1.1.1: Context Curator（可选）
@@ -150,11 +150,11 @@ const context = await tool.search_context({ query: userRequest, topK: 15 });
 2. 输出 `.agentmem/context.md`（包含路径、行号、关键片段摘要）
 3. 其他 Agent 仅读取该文件，避免上下文膨胀
 
-#### 步骤 1.2: 需求完整性评分（Analyst Subagent）
+#### 步骤 1.2: 需求完整性评分（flowmem-analyst）
 
 > **设计原则（借鉴 Lyra 4-D 方法论）**: AI 应主动识别缺失信息并追问，而不是让用户猜测 AI 需要什么。
 
-**Analyst 的 4-D 处理流程**:
+**flowmem-analyst 的 4-D 处理流程**:
 
 ```
 1. DECONSTRUCT（解构）
@@ -212,7 +212,7 @@ const context = await tool.search_context({ query: userRequest, topK: 15 });
 | **限制数量** | 最多 3 个问题，避免问卷式轰炸 | 优先问影响方案方向的关键问题 |
 | **提供选项** | 给出选项比开放式问题更易回答 | "A. 纯后端 API，B. 含前端页面，C. 全栈" |
 
-**Analyst 输出格式**:
+**flowmem-analyst 输出格式**:
 
 ```markdown
 ## 需求分析结果
@@ -232,14 +232,14 @@ const context = await tool.search_context({ query: userRequest, topK: 15 });
 请回答以上问题，或直接告诉我"用默认方案"。
 ```
 
-#### 步骤 1.3: 方案迭代（Solver + Critic Subagent）
+#### 步骤 1.3: 方案迭代（flowmem-solver + flowmem-critic）
 
 > 详细机制见 [2.3 方案迭代机制](./workflow-optimization-proposal-02-architecture.md)
 
 **简要流程**:
-1. Solver 生成方案 V1
-2. Critic 审核（检查方向正确性、技术可行性、完整性、风险点）
-3. 未通过 → Solver 根据反馈修改 → Critic 再审（最多 2 轮）
+1. flowmem-solver 生成方案 V1
+2. flowmem-critic 审核（检查方向正确性、技术可行性、完整性、风险点）
+3. 未通过 → flowmem-solver 根据反馈修改 → flowmem-critic 再审（最多 2 轮）
 4. 通过 → 用户确认
 
 #### 步骤 1.4: 用户确认
@@ -317,7 +317,7 @@ completeness_score: 9
 
 #### 步骤 2.1: WBS 任务分解
 
-如存在 implementation 目录，Planner 必须优先依据其内容拆解任务；若与 request.md 冲突，需提示用户确认。
+如存在 implementation 目录，flowmem-planner 必须优先依据其内容拆解任务；若与 request.md 冲突，需提示用户确认。
 
 ```
 Level 1: 功能
@@ -373,10 +373,10 @@ for each todo in todolist:
     ├─ 1. 检索上下文 (工具内置优先 / ccq-engine 可选)
     │      context = search_context(todo.content)
     │
-    ├─ 2. 执行任务 (Coder Subagent)
+    ├─ 2. 执行任务 (flowmem-coder)
     │      changes = coderImplement(todo, context)
     │
-    ├─ 3. 自动审核 (Reviewer Subagent)
+    ├─ 3. 自动审核 (flowmem-reviewer)
     │      result = reviewerReview(changes, todo.acceptance)
     │
     ├─ 4. 结果处理
@@ -388,7 +388,7 @@ for each todo in todolist:
 
 #### 重试策略
 
-当 Reviewer 审核不通过时，按以下策略重试：
+当 flowmem-reviewer 审核不通过时，按以下策略重试：
 
 ```
 retry_with_strategy():
@@ -396,14 +396,14 @@ retry_with_strategy():
     ├─ 重试次数 < 2?
     │   │
     │   ├─ 第 1 次重试
-    │   │   ├─ 将 Reviewer 反馈传递给 Coder
-    │   │   ├─ Coder 根据反馈修改代码
-    │   │   └─ 重新提交 Reviewer 审核
+    │   │   ├─ 将 flowmem-reviewer 反馈传递给 flowmem-coder
+    │   │   ├─ flowmem-coder 根据反馈修改代码
+    │   │   └─ 重新提交 flowmem-reviewer 审核
     │   │
     │   └─ 第 2 次重试
     │       ├─ 重新检索上下文（扩大范围 topK * 1.5）
-    │       ├─ Coder 基于新上下文重新实现
-    │       └─ 重新提交 Reviewer 审核
+    │       ├─ flowmem-coder 基于新上下文重新实现
+    │       └─ 重新提交 flowmem-reviewer 审核
     │
     └─ 重试次数 >= 2?
         ├─ 标记 todo 状态为 blocked
@@ -423,13 +423,13 @@ retry_with_strategy():
 
 ### 第 1 次尝试
 - 时间: 2026-01-22T10:30:00Z
-- Reviewer 反馈: 缺少错误处理
+- flowmem-reviewer 反馈: 缺少错误处理
 - 状态: 失败
 
 ### 第 2 次尝试（根据反馈修改）
 - 时间: 2026-01-22T10:35:00Z
 - 修改内容: 添加 try-catch 块
-- Reviewer 反馈: 通过
+- flowmem-reviewer 反馈: 通过
 - 状态: 成功
 ```
 
@@ -437,9 +437,9 @@ retry_with_strategy():
 
 以下情况可突破 2 次重试限制（需用户确认）：
 - 用户明确要求继续尝试
-- 每次重试都有实质性进展（Reviewer 反馈问题数减少）
+- 每次重试都有实质性进展（flowmem-reviewer 反馈问题数减少）
 
-#### Reviewer 审核清单
+#### flowmem-reviewer 审核清单
 
 | 级别 | 检查项 | 必须通过 |
 |------|--------|----------|
@@ -460,8 +460,8 @@ retry_with_strategy():
 - High: 认证/权限/生产配置/数据迁移/删除/不可逆操作，或 >200 LOC、>8 文件
 
 **升级动作**:
-- Low: Reviewer 通过即可自动 apply
-- Medium: Reviewer 通过 + 必跑测试；测试缺失需用户确认
+- Low: flowmem-reviewer 通过即可自动 apply
+- Medium: flowmem-reviewer 通过 + 必跑测试；测试缺失需用户确认
 - High: 必须用户确认后才 apply，且需二次审核或显式高风险批准
 
 **默认高风险路径（可在 project.md 覆盖）**:
@@ -528,7 +528,7 @@ npm run build     # 构建检查
 | 触发方式 | 说明 |
 |----------|------|
 | 用户命令 | 输入 `/rollback` 或 "回滚" |
-| Reviewer 连续失败 | 同一 todo 重试 2 次仍失败 |
+| flowmem-reviewer 连续失败 | 同一 todo 重试 2 次仍失败 |
 | 用户中途否决 | 用户明确表示方案方向错误 |
 
 #### 回滚粒度
@@ -575,7 +575,7 @@ npm run build     # 构建检查
 
 **时间**: 2026-01-22T10:30:00Z
 **级别**: todo / phase / full
-**触发方式**: 用户命令 / Reviewer 失败 / 用户否决
+**触发方式**: 用户命令 / flowmem-reviewer 失败 / 用户否决
 
 ### 回滚范围
 
@@ -639,7 +639,7 @@ npm run build     # 构建检查
 {
   "timestamp": "2026-01-22T10:30:00Z",
   "type": "agent_timeout",
-  "agent": "Coder",
+  "agent": "flowmem-coder",
   "todo_id": "TODO-003",
   "details": {
     "timeout_seconds": 60,

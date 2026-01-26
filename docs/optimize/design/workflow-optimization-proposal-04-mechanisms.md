@@ -3,9 +3,9 @@
 ## 4.1 Subagent 权限隔离（Claude Code）
 
 通过 Subagent 配置实现强约束：
-- Reviewer/Critic 只读（禁 Write/Edit/Bash）。
-- Planner/Analyst 允许检索工具。
-- Coder 允许写入（acceptEdits）。
+- flowmem-reviewer/flowmem-critic 只读（禁 Write/Edit/Bash）。
+- flowmem-planner/flowmem-analyst 允许检索工具。
+- flowmem-coder 允许写入（acceptEdits）。
 - Subagent 不继承主会话 skills，需显式注入。
 
 **注意**: Background Subagent 不可用 MCP 工具；涉及检索的任务需前台执行。
@@ -85,12 +85,12 @@ release_lock() {
 
 | Agent | 输出文件 | 格式要求 |
 |-------|----------|----------|
-| Analyst | `.agentmem/analysis.md` | 评分 + 问题清单 |
-| Solver | `.agentmem/plan.md` | 方案描述 + 技术选型 |
-| Critic | `.agentmem/review.md` | 通过/拒绝 + 问题清单 |
-| Planner | `.agentmem/todolist.md` | YAML frontmatter + 任务列表 |
-| Coder | 直接修改代码文件 | 遵循项目规范 |
-| Reviewer | `.agentmem/logs/review-<todo-id>.md` | 审核结论 + 详细反馈 |
+| flowmem-analyst | `.agentmem/analysis.md` | 评分 + 问题清单 |
+| flowmem-solver | `.agentmem/plan.md` | 方案描述 + 技术选型 |
+| flowmem-critic | `.agentmem/review.md` | 通过/拒绝 + 问题清单 |
+| flowmem-planner | `.agentmem/todolist.md` | YAML frontmatter + 任务列表 |
+| flowmem-coder | 直接修改代码文件 | 遵循项目规范 |
+| flowmem-reviewer | `.agentmem/logs/review-<todo-id>.md` | 审核结论 + 详细反馈 |
 
 ---
 
@@ -99,7 +99,7 @@ release_lock() {
 `.agentmem/` 允许存敏感信息，因此保留最小可回放证据链：
 - 用户确认后的需求版本（含时间戳）。
 - 关键检索片段的引用或摘要（含路径）。
-- Solver/Critic/Reviewer 结论摘要（含拒绝原因）。
+- flowmem-solver/flowmem-critic/flowmem-reviewer 结论摘要（含拒绝原因）。
 - 变更摘要与测试结果。
 
 **推荐格式**:
@@ -149,7 +149,7 @@ ESCALATION RECOMMENDED: [原因] -> [建议提升到的 Agent/模型]
 
 **策略**:
 - 默认禁止直接写入，由 Orchestrator 统一更新。
-- 需要修改时，必须先在 todolist 标注理由并走 Reviewer 复核。
+- 需要修改时，必须先在 todolist 标注理由并走 flowmem-reviewer 复核。
 
 ### 4.5.2 Git Pre-commit Hook
 
@@ -174,10 +174,10 @@ flowmem audit pre-commit || exit 1
 | **Pre-Session/Pre-Message** | 开始处理请求前 | 强制加载规则与上下文 | 检查 `.agentmem/request.md`/`todolist.md` 是否存在；缺失则要求补全 |
 | **Pre-Tool (Write/Edit)** | 写入或编辑前 | 阻止越权修改 | 拦截保护文件与高风险路径；校验当前 todo 是否匹配 |
 | **Post-Tool (Write/Edit)** | 写入或编辑后 | 留痕与同步 | 追加 `.agentmem/logs/trace.jsonl`；更新 todo 状态或变更摘要 |
-| **Pre-Response** | 回复用户前 | 质量门禁 | 如触及高风险路径，要求 Reviewer 通过或提示必须跑测试 |
+| **Pre-Response** | 回复用户前 | 质量门禁 | 如触及高风险路径，要求 flowmem-reviewer 通过或提示必须跑测试 |
 
 **Hook 输出约定**:
-- 阻断时必须返回可执行提示（例如"先补 request.md"、"需要 Reviewer 复核"）。
+- 阻断时必须返回可执行提示（例如"先补 request.md"、"需要 flowmem-reviewer 复核"）。
 - 通过时可补充简短提醒（例如"已记录变更摘要"）。
 
 **规则矩阵（示例）**:
@@ -186,13 +186,13 @@ flowmem audit pre-commit || exit 1
 |------|----------|------|
 | **核心记忆缺失** | `.agentmem/request.md` 或 `.agentmem/todolist.md` 缺失 | block |
 | **保护文件写入** | 写入/编辑保护清单文件 | block |
-| **高风险路径** | 命中高风险路径且未 Reviewer 通过 | block |
+| **高风险路径** | 命中高风险路径且未 flowmem-reviewer 通过 | block |
 | **Todo 未对齐** | 当前变更不匹配进行中的 todo | warn |
 | **测试未记录** | 高风险变更且未记录测试计划 | warn |
 
 **最小落地顺序**:
 1. Pre-Tool 写入拦截（保护文件/高风险路径）。
-2. Pre-Response 质量门禁（Reviewer 结论/测试要求）。
+2. Pre-Response 质量门禁（flowmem-reviewer 结论/测试要求）。
 3. Post-Tool 留痕（trace.jsonl + 变更摘要）。
 4. Pre-Session 规则加载校验（核心记忆文件存在性）。
 
@@ -281,9 +281,9 @@ HIGH_RISK_PATHS=(
 
 for risk_path in "${HIGH_RISK_PATHS[@]}"; do
   if [[ "$1" == *"$risk_path"* ]]; then
-    # 检查是否有 Reviewer 通过标记
+    # 检查是否有 flowmem-reviewer 通过标记
     if [[ ! -f ".agentmem/.reviewer_approved" ]]; then
-      echo "BLOCKED: 高风险路径 $risk_path 需要 Reviewer 审核通过"
+      echo "BLOCKED: 高风险路径 $risk_path 需要 flowmem-reviewer 审核通过"
       exit 1
     fi
   fi

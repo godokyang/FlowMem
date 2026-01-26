@@ -44,15 +44,15 @@
 
 | 术语 | 定义 | 备注 |
 |------|------|------|
-| **Agent** | 具有明确职责的 AI 角色，负责特定任务 | 如 Analyst、Solver、Coder 等 |
+| **Agent** | 具有明确职责的 AI 角色，负责特定任务 | 如 flowmem-analyst、flowmem-solver、flowmem-coder 等 |
 | **Subagent** | Claude Code 子代理，拥有独立上下文窗口和执行循环 | 与主会话隔离，通过文件交接 |
 | **Orchestrator** | 主会话协调者，负责阶段推进和产出校验 | 不作为独立 Subagent 存在 |
 | **Phase** | 工作流阶段 | Phase 1-4 对应需求澄清到交付 |
 | **Todo** | 单个可执行任务项 | 存储在 todolist.md 中 |
 | **Acceptance** | 验收条件 | 每个 Todo 的完成标准 |
-| **Context Curator** | 上下文打包 Agent | 负责压缩和整理检索结果 |
-| **Reviewer** | 代码审核 Agent | 检查代码质量和偷懒行为 |
-| **Critic** | 方案审核 Agent | 检查技术方案的可行性 |
+| **Context Curator** | 上下文打包 Agent（flowmem-context-curator） | 负责压缩和整理检索结果 |
+| **flowmem-reviewer** | 代码审核 Agent | 检查代码质量和偷懒行为 |
+| **flowmem-critic** | 方案审核 Agent | 检查技术方案的可行性 |
 | **Hook** | Claude Code 钩子 | 在特定事件触发时执行的脚本 |
 | **ccq-engine** | 可选的检索增强引擎 | 用于大仓库或跨会话场景 |
 
@@ -61,7 +61,7 @@
 1. **Agent 相关**
    - 使用 "Agent" 而非 "角色" 或 "代理"
    - 使用 "Subagent" 而非 "子代理" 或 "子 Agent"
-   - Agent 名称首字母大写：Analyst, Solver, Critic, Planner, Coder, Reviewer
+   - Agent 名称使用 `flowmem-` 前缀：flowmem-analyst, flowmem-solver, flowmem-critic, flowmem-planner, flowmem-coder, flowmem-reviewer
 
 2. **流程相关**
    - 使用 "Phase" 而非 "阶段"（在正式描述中）

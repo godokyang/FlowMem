@@ -2,125 +2,347 @@
 
 ## 5.1 Claude Code（全量安装）
 
-- 全量安装（commands + agents + skills）。
-- 使用 Subagent 实现上下文隔离与权限控制。
-- Orchestrator 留在主会话，负责阶段推进与文件产出校验。
-- 启用 Claude Code hooks，作为写入拦截与质量门禁（可与 Git hook 叠加）。
-- MCP 检索为可选增强（前台使用）。
-- 复杂任务可启用 `.agentmem/implementation/` 细化确认（结构/伪代码/接口）。
+### 安装方式
+
+```bash
+# 初始化 .agentmem 目录 + 安装 Claude Code 适配器
+flowmem init --adapter claude-code
+
+# 或交互式选择适配器
+flowmem init
+```
+
+### 安装内容
+
+安装后会在项目根目录创建以下结构：
+
+```
+项目根目录/
+├── .agentmem/                    # 工作记忆目录
+│   ├── project.md                # 项目配置
+│   ├── todolist.md               # 任务清单
+│   ├── session.json              # 会话状态
+│   ├── logs/                     # 日志目录
+│   ├── implementation/           # 实施细化（可选）
+│   ├── notepad/                  # 经验记录
+│   └── history/                  # 历史归档
+│
+└── .claude/                      # Claude Code 配置
+    ├── commands/flowmem/         # 6 个命令
+    │   ├── workflow.md           # 完整四阶段工作流
+    │   ├── plan.md               # 需求澄清 + 详细规划
+    │   ├── execute.md            # 执行任务
+    │   ├── resume.md             # 恢复任务
+    │   ├── status.md             # 查看状态
+    │   └── audit.md              # 审核检查
+    │
+    ├── agents/                   # 7 个子代理
+    │   ├── flowmem-analyst.md    # 需求分析
+    │   ├── flowmem-solver.md     # 方案设计
+    │   ├── flowmem-critic.md     # 方案审核
+    │   ├── flowmem-planner.md    # 任务分解
+    │   ├── flowmem-coder.md      # 代码实现
+    │   ├── flowmem-reviewer.md   # 代码审核
+    │   └── flowmem-context-curator.md  # 上下文打包
+    │
+    └── settings.json             # hooks 配置（合并到现有配置）
+```
+
+### 子代理（Subagent）配置
+
+子代理使用 Claude Code 官方的 YAML 前置元数据格式：
+
+```yaml
+---
+name: flowmem-analyst
+description: 需求分析专家。在 FlowMem 工作流 Phase 1 中主动使用，评估用户需求的完整性并识别缺失信息。
+tools: Read, Grep, Glob
+model: sonnet
+---
+
+你是需求分析专家...
+```
+
+**关键配置字段**：
+
+| 字段 | 说明 | 示例 |
+|------|------|------|
+| `name` | 唯一标识符，小写字母和连字符 | `flowmem-analyst` |
+| `description` | Claude 根据此字段决定何时委托 | 包含"主动使用"触发自动委托 |
+| `tools` | 子代理可用的工具 | `Read, Grep, Glob` |
+| `model` | 使用的模型 | `sonnet` / `opus` / `haiku` / `inherit` |
+| `permissionMode` | 权限模式 | `acceptEdits`（仅 Coder 使用） |
+
+**子代理权限隔离**：
+
+| 子代理 | 工具权限 | permissionMode |
+|--------|----------|----------------|
+| flowmem-analyst | Read, Grep, Glob | default |
+| flowmem-solver | Read, Grep, Glob | default |
+| flowmem-critic | Read, Grep, Glob | default |
+| flowmem-planner | Read, Grep, Glob | default |
+| flowmem-coder | Read, Edit, Write, Bash, Grep, Glob | acceptEdits |
+| flowmem-reviewer | Read, Grep, Glob | default |
+| flowmem-context-curator | Read, Grep, Glob | default |
+
+### 自动委托机制
+
+Claude 根据子代理的 `description` 字段自动决定何时委托任务。用户也可以明确请求：
+
+```
+使用 flowmem-analyst 子代理分析这个需求
+让 flowmem-reviewer 子代理审核刚才的代码变更
+```
+
+### Hooks 配置
+
+安装时会自动合并以下 hooks 到 `.claude/settings.json`：
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit",
+        "hooks": [
+          { "type": "command", "command": "flowmem guard check-protected \"$CLAUDE_FILE_PATH\"" },
+          { "type": "command", "command": "flowmem guard check-risk \"$CLAUDE_FILE_PATH\"" }
+        ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          { "type": "command", "command": "flowmem guard check-protected \"$CLAUDE_FILE_PATH\"" },
+          { "type": "command", "command": "flowmem guard check-risk \"$CLAUDE_FILE_PATH\"" }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          { "type": "command", "command": "flowmem guard log-change \"$CLAUDE_FILE_PATH\" -o \"$CLAUDE_TOOL_NAME\"" }
+        ]
+      }
+    ]
+  }
+}
+```
+
+### 使用方式
+
+```bash
+# 启动完整工作流
+/flowmem:workflow 实现用户登录功能
+
+# 仅规划（Phase 1-2）
+/flowmem:plan 添加购物车功能
+
+# 执行已有计划
+/flowmem:execute
+
+# 查看状态
+/flowmem:status
+
+# 恢复中断的任务
+/flowmem:resume
+
+# 运行审核检查
+/flowmem:audit
+```
+
+---
 
 ## 5.2 其他 IDE（v1 最简接入）
 
-适用于 Trae/Copilot 等工具，采用单会话最简流程（见 `docs/optimize/old_workflow.md`），不启用多 Agent 结构。
+适用于 Cursor、Windsurf、Cline、Copilot、Trae、Gemini 等工具。
 
-**简化流程要点**:
-1. 触发条件明确（涉及 3+ 文件 / 10+ 工具调用 / 新功能）。
-2. 必须产出 `request.md` 与 `todolist.md`。
-3. 关键动作必须输出提示并立即执行（“输出即执行约束”）。
-4. 任务结束必须归档并记录摘要。
-5. 复杂任务可选输出 `.agentmem/implementation/`，不作为硬性要求。
+### 安装方式
 
-**优化目标**: 保证 AI 能按流程运行，减少跳步与遗漏。
+```bash
+# 初始化 + 安装适配器
+flowmem init --adapter cursor
+flowmem init --adapter windsurf
+flowmem init --adapter cline
+flowmem init --adapter copilot
+flowmem init --adapter trae
+flowmem init --adapter gemini
 
-**检索策略**:
-- 默认走工具内置检索。
-- ccq-engine 作为可选增强层，主要用于大仓库或跨会话稳定检索。
-
-**测试策略优先级**:
-1) `.agentmem/project.md` 指定命令
-2) 项目脚本（package.json / Makefile / go test / pytest / cargo test）
-3) 无可用命令 → 标记“未运行 + 风险原因”
-
-**交付要求**:
-- 每次交付必须写明：执行了哪些测试，哪些未执行及原因。
-- 高风险变更若无测试可跑，必须用户确认。
-
----
-
-## 5.3 common-rules 与适配器同步
-
-在规则文件中增加四阶段工作流说明：
-
-```markdown
-## 工作流程（四阶段）
-
-### 何时触发？
-- 预估修改 ≥3 个文件
-- 预估工具调用 ≥10 次
-- 用户明确提到"规划"、"设计"
-
-### 流程
-1. **需求澄清** → 生成 request.md
-2. **详细规划** → 生成 todolist.md  
-3. **执行与审核** → 单步执行 + 自动审核
-4. **交付** → 生成报告
+# 或交互式选择
+flowmem init
 ```
 
-在各适配器的 rules.md 中嵌入工作流指令，通过 `build-adapters.sh` 统一生成。
+### 安装内容
+
+```
+项目根目录/
+├── .agentmem/                    # 工作记忆目录
+│   └── ...
+│
+├── .cursorrules                  # Cursor 规则文件
+│   或 .windsurfrules             # Windsurf 规则文件
+│   或 .clinerules                # Cline 规则文件
+│   或 .github/copilot-instructions.md  # Copilot 规则文件
+│   或 .trae/rules/context-memory.md    # Trae 规则文件
+│   或 gemini-rules.md            # Gemini 规则文件
+│
+└── .flowmem/                     # 模板和示例
+    ├── templates/
+    └── examples/
+```
+
+### 规则文件内容
+
+所有非 Claude Code 的 IDE 使用统一的 `common-rules.md` 作为规则源，包含：
+
+1. **四阶段工作流**（简化版，无子代理）
+2. **债务机制**（知识沉淀）
+3. **TodoList YAML 格式规范**
+4. **自我审核机制**（替代 Reviewer 子代理）
+5. **高风险变更升级门槛**
+6. **7 条关键规则**
+7. **AI 自检清单**
+
+### 简化流程要点
+
+1. **触发条件明确**：涉及 3+ 文件 / 10+ 工具调用 / 新功能
+2. **必须产出**：`request.md` 与 `todolist.md`
+3. **输出即执行约束**：关键动作必须输出提示并立即执行
+4. **自我审核**：每个任务完成后必须自我审核（无独立 Reviewer）
+5. **任务归档**：任务结束必须归档并记录摘要
 
 ---
 
-## 5.4 实施计划与 MVP
+## 5.3 数据源架构
 
-### 任务分解
+### 两套独立数据源
 
-| 模块 | 任务点 | 预估时间 |
-|------|--------|----------|
-| Phase 1: 需求澄清 | 9 | 12-15小时 |
-| Phase 2: 详细规划 | 5 | 6-8小时 |
-| Phase 3: 执行与审核 | 12 | 16-20小时 |
-| Phase 4: 交付 | 3 | 4-5小时 |
-| Subagent 模板与权限配置 | 6 | 8-10小时 |
-| 其他 IDE v1 最简流程适配 | 4 | 5-7小时 |
-| **总计** | **39** | **51-65小时** |
+| 数据源 | 适用 IDE | 位置 | 特点 |
+|--------|----------|------|------|
+| **commands + agents** | Claude Code | `templates/commands/*.md` + `templates/agents/*.md` | 利用子代理、commands 等特性 |
+| **common-rules.md** | 其他 IDE | `adapters/common-rules.md` | 通用规则，无子代理 |
 
-### MVP 优先级
+### 构建适配器
 
-**MVP 0（验证核心假设）** - 2 任务点：
+```bash
+# 构建所有适配器
+flowmem build-adapters
 
-> 目标：在最小投入下验证 Reviewer 能否有效检测"偷懒代码"
+# 只构建指定适配器
+flowmem build-adapters --only claude-code
+flowmem build-adapters --only cursor
+```
 
-1. 单独实现 Reviewer 审核逻辑（2点）
-   - 实现偷懒检测规则（console.log/TODO/空实现）
-   - 实现 acceptance 条件校验
-   - 输出结构化审核报告
+构建后的适配器包位于 `adapters/` 目录：
 
-**验证方法**:
-- 准备 10 个标准测试用例：
-  - 3 个正常实现（应通过）
-  - 3 个偷懒实现（console.log/TODO/空函数）
-  - 2 个部分实现（缺少错误处理）
-  - 2 个边界情况（命名不规范/缺少注释）
-- 手动触发 Reviewer 审核，记录检出率
-- 目标：偷懒代码检出率 ≥90%
-
-**MVP 1（8 任务点）** - 解决最紧迫的偷懒问题：
-1. MVP 0 全部（2点）
-2. Subagent 只读权限配置（2点）
-3. 需求评分 + 追问机制（3点）
-4. flowmem guard CLI 基础实现（1点）
-
-**MVP 2（16 任务点）** - 完整核心流程：
-1. MVP 1 全部
-2. Solver + Critic 方案迭代（3点）
-3. WBS 分解（2点）
-4. 执行循环（3点）
-5. Context Curator（长上下文打包）（3点）
+```
+adapters/
+├── claude-code/
+│   └── .claude/
+│       ├── commands/flowmem/     # 6 个命令
+│       ├── agents/               # 7 个子代理
+│       └── settings.example.json # hooks 配置示例
+│
+├── cursor/
+│   ├── .cursorrules              # 规则文件
+│   └── .flowmem/                 # 模板和示例
+│
+├── windsurf/
+├── cline/
+├── copilot/
+├── trae/
+├── gemini/
+└── common-rules.md               # 通用规则源文件
+```
 
 ---
 
-## 5.5 成本预估（API 调用次数）
+## 5.4 CLI 命令参考
 
-| 阶段 | Agent 调用次数 | 说明 |
-|------|---------------|------|
-| Phase 1 | 2-4 次 | Analyst(1) + Solver(1) + Critic(1) + [Solver 修改(1)] |
-| Phase 2 | 1 次 | Planner |
-| Phase 3 | 2N 次 | N 个 todo × (Coder + Reviewer) |
-| Phase 4 | 0 次 | Orchestrator 整合，无需额外调用 |
+### flowmem init
 
-**示例**: 10 个 todo 的任务
-- 最佳情况（一次通过）: 1 + 1 + 1 + 1 + 20 = **24 次 API 调用**
-- 典型情况（需一轮修改）: 1 + 1 + 1 + 1 + 1 + 1 + 20 = **26 次 API 调用**
+```bash
+flowmem init [options]
+
+选项:
+  -f, --force           强制重新初始化（覆盖现有文件）
+  -a, --adapter <name>  指定要安装的 IDE 适配器
+  --list-adapters       列出所有可用的适配器
+  --skip-templates      跳过模板文件创建
+  --skip-adapter        跳过适配器安装（不弹出选择）
+  --adapter-only        仅安装适配器，跳过 .agentmem 初始化
+```
+
+### flowmem todo
+
+```bash
+flowmem todo <command> [options]
+
+命令:
+  list                  列出所有任务
+  stats                 查看进度统计
+  get --id <id>         获取任务详情
+  add --content <text>  添加任务
+  set --id <id>         更新任务
+
+选项:
+  --status <status>     任务状态 (pending/in_progress/completed/cancelled)
+  --priority <level>    优先级 (high/medium/low)
+  --estimate <time>     预估时间 (5m/1h/2d)
+  --phase <name>        阶段名称
+  --acceptance <text>   验收条件（可多次使用）
+```
+
+### flowmem audit
+
+```bash
+flowmem audit [checks...] [options]
+
+检查项:
+  debt                  检查知识债务
+  sync                  检查文件同步
+  todo                  检查任务状态
+  dependency-check      检查依赖关系
+
+选项:
+  --json                JSON 格式输出
+  --lazy                检查偷懒代码
+```
+
+### flowmem guard
+
+```bash
+flowmem guard <command> [options]
+
+命令:
+  check-protected <path>  检查是否为受保护文件
+  check-risk <path>       检查是否为高风险路径
+  log-change <path>       记录文件变更
+```
+
+---
+
+## 5.5 实施计划与 MVP
+
+### 已完成
+
+- [x] CLI 基础框架（commander + TypeScript）
+- [x] `flowmem init` 命令（含交互式适配器选择）
+- [x] `flowmem todo` 命令（YAML 格式 todolist）
+- [x] `flowmem audit` 命令（含依赖检查）
+- [x] `flowmem guard` 命令（hooks 集成）
+- [x] `flowmem build-adapters` 命令
+- [x] Claude Code 子代理模板（7 个）
+- [x] Claude Code 命令模板（6 个）
+- [x] 其他 IDE 通用规则（common-rules.md）
+- [x] settings.json 合并逻辑
+
+### 待完成
+
+- [ ] Context Curator 触发逻辑
+- [ ] 会话恢复机制
+- [ ] 回滚命令实现
+- [ ] 效果验证测试集
 
 ---
 
@@ -133,83 +355,4 @@
 | 需求返工率 | 40% | <15% | ↓ 60% |
 | 任务完成可靠性 | 70% | 95% | ↑ 25% |
 | 上下文污染 | 高 | 低 | 明显下降 |
-| Token 超限次数 | 频繁 | 低频 | 明显下降 |
 | 多工具可用性 | 低 | 中 | 提升 |
-| 其他 IDE 接入成本 | 高 | 低 | 明显下降 |
-
----
-
-## 5.7 效果验证方案
-
-### 验证指标定义
-
-| 指标 | 计算方式 | 数据来源 |
-|------|----------|----------|
-| **偷懒检出率** | 被 Reviewer 拦截的偷懒代码数 / 总偷懒代码数 | `.agentmem/logs/` 审核记录 |
-| **误报率** | 正常代码被误判为偷懒的次数 / 总审核次数 | Reviewer 审核日志 |
-| **任务完成率** | 成功完成的 todo 数 / 总 todo 数 | `todolist.md` 状态统计 |
-| **平均重试次数** | 总重试次数 / 总 todo 数 | 重试日志统计 |
-| **用户介入频率** | 需要用户介入的次数 / 总任务数 | 交互日志 |
-
-### 基准测试集
-
-准备 20 个标准化测试任务，覆盖以下场景：
-
-| 类别 | 数量 | 示例 |
-|------|------|------|
-| **简单修复** | 5 | 修复 typo、调整样式、修改配置 |
-| **功能添加** | 5 | 添加按钮、新增 API 端点、增加字段 |
-| **重构优化** | 5 | 提取函数、重命名变量、拆分文件 |
-| **偷懒陷阱** | 5 | 故意设计容易偷懒的任务（如"实现缓存"） |
-
-### 验证流程
-
-```
-1. 基准测试（优化前）
-   ├─ 使用现有流程执行 20 个测试任务
-   ├─ 记录各项指标
-   └─ 人工复核代码质量
-
-2. 对照测试（优化后）
-   ├─ 使用新流程执行相同 20 个任务
-   ├─ 记录各项指标
-   └─ 人工复核代码质量
-
-3. 结果对比
-   ├─ 计算各指标变化率
-   ├─ 分析失败案例
-   └─ 输出验证报告
-```
-
-### 验证报告模板
-
-```markdown
-## FlowMem Workflow 优化效果验证报告
-
-**测试日期**: YYYY-MM-DD
-**测试版本**: vX.X
-
-### 核心指标对比
-
-| 指标 | 优化前 | 优化后 | 变化 | 达标 |
-|------|--------|--------|------|------|
-| 偷懒检出率 | X% | Y% | +Z% | ✅/❌ |
-| 误报率 | X% | Y% | -Z% | ✅/❌ |
-| 任务完成率 | X% | Y% | +Z% | ✅/❌ |
-
-### 失败案例分析
-
-[列出未达预期的案例及原因]
-
-### 改进建议
-
-[基于测试结果的优化建议]
-```
-
-### 持续监控
-
-上线后通过以下方式持续监控效果：
-
-1. **日志聚合**: 每日汇总 `.agentmem/logs/` 中的审核记录
-2. **周报生成**: 每周自动生成效果统计报告
-3. **异常告警**: 偷懒检出率下降或误报率上升时告警

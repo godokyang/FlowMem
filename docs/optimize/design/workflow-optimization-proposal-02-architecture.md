@@ -30,21 +30,38 @@
 | 方案质量 | ❌ 一次生成，无审核 | ✅ Solver + Critic 迭代打磨 |
 | 上下文污染 | ❌ 共享上下文 | ✅ Subagent 独立上下文 |
 
-**Agent 清单（7 个）**:
+**Agent 清单（7 个子代理 + 1 个编排者）**:
 
-| Agent | 职责 | 调用时机 | 输入 | 输出 |
-|-------|------|----------|------|------|
-| **Orchestrator** | 流程控制、状态管理、用户交互 | 全程 | 用户请求 | 协调指令、最终输出 |
-| **Analyst** | 需求分析、完整性评分、追问 | Phase 1.2 | 用户需求 + 代码上下文 | 评分 + 追问问题 |
-| **Solver** | 方案设计 | Phase 1.3 | 需求 + 上下文 + Critic 反馈 | 技术方案 |
-| **Critic** | 方案审核、找问题 | Phase 1.3 | 方案 + 需求 + 约束 | 通过/问题清单 |
-| **Planner** | 任务分解、WBS、依赖分析 | Phase 2 | request.md | todolist.md |
-| **Coder** | 代码实现 | Phase 3 | 单个 todo + 上下文 | 代码变更 |
-| **Reviewer** | 代码审核、质量把关 | Phase 3 | 代码变更 + 验收条件 | 通过/拒绝 + 理由 |
+| Agent | 子代理名称 | 职责 | 调用时机 | 工具权限 |
+|-------|------------|------|----------|----------|
+| **Orchestrator** | （主会话） | 流程控制、状态管理、用户交互 | 全程 | 全部 |
+| **Analyst** | `flowmem-analyst` | 需求分析、完整性评分、追问 | Phase 1.2 | 只读 |
+| **Solver** | `flowmem-solver` | 方案设计 | Phase 1.3 | 只读 |
+| **Critic** | `flowmem-critic` | 方案审核、找问题 | Phase 1.3 | 只读 |
+| **Planner** | `flowmem-planner` | 任务分解、WBS、依赖分析 | Phase 2 | 只读 |
+| **Coder** | `flowmem-coder` | 代码实现 | Phase 3 | 读写 |
+| **Reviewer** | `flowmem-reviewer` | 代码审核、质量把关 | Phase 3 | 只读 |
+| **Context Curator** | `flowmem-context-curator` | 上下文打包（可选） | Phase 1.1 | 只读 |
+
+**子代理配置格式**（Claude Code 官方 YAML 前置元数据）:
+
+```yaml
+---
+name: flowmem-analyst
+description: 需求分析专家。在 FlowMem 工作流 Phase 1 中主动使用，评估用户需求的完整性并识别缺失信息。
+tools: Read, Grep, Glob
+model: sonnet
+---
+
+你是需求分析专家...
+```
+
+**自动委托机制**: Claude 根据子代理的 `description` 字段自动决定何时委托任务。
 
 **约束**:
-- Orchestrator 留在主会话，避免再做一层 Agent。
-- Subagent 只通过 `.agentmem/*` 交接产出。
+- Orchestrator 留在主会话，不作为独立子代理。
+- 子代理通过 `.agentmem/*` 文件交接产出。
+- 只读子代理禁止使用 Write/Edit/Bash 工具。
 
 ---
 

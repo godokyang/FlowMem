@@ -1,10 +1,10 @@
 #!/bin/bash
 # ============================================================================
-# init-agentmem.sh - AI 上下文记忆系统初始化脚本
+# init-agentmem.sh - AI 上下文记忆系统初始化脚本 (v2.8)
 # ============================================================================
 # ⚠️  DEPRECATED: 此脚本已废弃，请使用 CLI 命令代替
 #
-# 新用法: 
+# 新用法:
 #   npx flowmem init              # 使用 npm 包（推荐）
 #   flowmem init                  # 如已全局安装
 #
@@ -35,7 +35,7 @@ EXAMPLES_DIR="${SCRIPT_DIR}/../examples"
 DOCS_DIR="${SCRIPT_DIR}/../docs"
 
 echo -e "${BLUE}============================================${NC}"
-echo -e "${BLUE}  AI 上下文记忆系统初始化${NC}"
+echo -e "${BLUE}  AI 上下文记忆系统初始化 (v2.8)${NC}"
 echo -e "${BLUE}============================================${NC}"
 echo ""
 
@@ -60,13 +60,14 @@ main() {
 
     # 2. 生成所有适配器规则
     echo "正在生成所有适配器配置..."
-    
+
     # 2.1 Claude Code
     mkdir -p .claude/skills/context-memory-system
     local dest=".claude/skills/context-memory-system/SKILL.md"
     echo "---" > "$dest"
     echo "name: context-memory-system" >> "$dest"
-    echo "description: 使用持久化 Markdown 文件管理 AI 工作记忆。在开始复杂任务、多步骤项目时自动激活。" >> "$dest"
+    echo "description: FlowMem 上下文记忆系统 v2.8。使用持久化 Markdown 文件管理 AI 工作记忆，支持四阶段工作流与多 Agent 架构。" >> "$dest"
+    echo "autorun: true" >> "$dest"
     echo "---" >> "$dest"
     echo "" >> "$dest"
     # 手动替换并追加
@@ -76,7 +77,7 @@ main() {
         -e "s|{{SCRIPT_DIR}}|.agentmem/scripts|g" \
         -e "s|{{DOCS_DIR}}|.agentmem/docs|g" \
         "$SCRIPT_DIR/../adapters/common-rules.md" >> "$dest"
-            
+
     echo "✅ 已生成 Claude Code Skill: $dest"
 
     # 2.2 Cursor
@@ -111,11 +112,11 @@ main() {
 
     # 3. 复制模板文件
     copy_template "project.md" ".agentmem/project.md"
-    
+
     # 3.1 复制所有模板到 .agentmem/templates 作为 AI 参考
     cp -r "$TEMPLATE_DIR/"* "$AGENTMEM_DIR/templates/"
     echo "✅ 已复制所有模板到 .agentmem/templates/ (供 AI 参考)"
-    
+
     # 3.2 复制使用场景示例
     mkdir -p "$AGENTMEM_DIR/examples"
     if [ -d "$EXAMPLES_DIR" ]; then
@@ -142,60 +143,107 @@ main() {
     else
         echo "⚠️  未找到辅助脚本，跳过复制"
     fi
-    
+
+    # 3.5 复制 flowmem guard 脚本 (v2.8 新增)
+    if [ -f "$SCRIPT_DIR/flowmem-guard.sh" ]; then
+        cp "$SCRIPT_DIR/flowmem-guard.sh" "$AGENTMEM_DIR/scripts/"
+        chmod +x "$AGENTMEM_DIR/scripts/flowmem-guard.sh"
+        echo "✅ 已复制 flowmem guard 脚本到 .agentmem/scripts/"
+    fi
+
+    # 3.6 复制 Claude Code hooks 配置示例 (v2.8 新增)
+    if [ -f "$SCRIPT_DIR/../examples/claude-hooks-settings.json" ]; then
+        mkdir -p ".claude"
+        cp "$SCRIPT_DIR/../examples/claude-hooks-settings.json" ".claude/settings.example.json"
+        echo "✅ 已复制 Claude Code hooks 配置示例到 .claude/settings.example.json"
+    fi
+
     # 完成
     echo ""
-    echo "🎉 FlowMem 初始化完成！"
+    echo "🎉 FlowMem v2.8 初始化完成！"
     echo ""
     echo "下一步："
     echo "1. 编辑 .agentmem/project.md 填入项目基本信息"
     echo "2. 开始你的第一个任务：创建 .agentmem/request.md"
+    echo ""
+    echo "v2.8 新特性："
+    echo "- 四阶段工作流（需求澄清 → 详细规划 → 执行与审核 → 交付）"
+    echo "- 多 Agent 架构（Analyst/Solver/Critic/Planner/Coder/Reviewer）"
+    echo "- Claude Code Hooks 支持（写入拦截与质量门禁）"
+    echo "- 偷懒检测与自动审核机制"
 }
 
-# 辅助函数：初始化目录结构
+# 辅助函数：初始化目录结构 (v2.8 更新)
 init_directory_structure() {
-    echo -e "${BLUE}正在创建目录结构...${NC}"
-    
+    echo -e "${BLUE}正在创建目录结构 (v2.8)...${NC}"
+
+    # 核心目录
     mkdir -p "$AGENTMEM_DIR"
     mkdir -p "$AGENTMEM_DIR/docs"
     mkdir -p "$AGENTMEM_DIR/docs/modules"
-    mkdir -p "$AGENTMEM_DIR/request_detail"
     mkdir -p "$AGENTMEM_DIR/history"
     mkdir -p "$AGENTMEM_DIR/scripts"
+    mkdir -p "$AGENTMEM_DIR/templates"
+
+    # v2.8 新增目录
+    mkdir -p "$AGENTMEM_DIR/logs"
+    mkdir -p "$AGENTMEM_DIR/implementation"
+    mkdir -p "$AGENTMEM_DIR/notepad"
+    mkdir -p "$AGENTMEM_DIR/.lock"
 
     echo -e "  ✓ 创建 $AGENTMEM_DIR/"
     echo -e "  ✓ 创建 $AGENTMEM_DIR/docs/"
     echo -e "  ✓ 创建 $AGENTMEM_DIR/docs/modules/"
-    echo -e "  ✓ 创建 $AGENTMEM_DIR/docs/modules/"
-    echo -e "  ✓ 创建 $AGENTMEM_DIR/request_detail/"
     echo -e "  ✓ 创建 $AGENTMEM_DIR/history/"
     echo -e "  ✓ 创建 $AGENTMEM_DIR/scripts/"
-    
-    # 创建模板参考目录
-    mkdir -p "$AGENTMEM_DIR/templates"
     echo -e "  ✓ 创建 $AGENTMEM_DIR/templates/ (AI 参考用)"
-    
+    echo -e "  ✓ 创建 $AGENTMEM_DIR/logs/ (v2.8 新增)"
+    echo -e "  ✓ 创建 $AGENTMEM_DIR/implementation/ (v2.8 新增)"
+    echo -e "  ✓ 创建 $AGENTMEM_DIR/notepad/ (v2.8 新增)"
+    echo -e "  ✓ 创建 $AGENTMEM_DIR/.lock/ (v2.8 新增)"
+
     # 创建 .gitignore
     cat > "$AGENTMEM_DIR/.gitignore" << 'EOF'
 # 建议忽略的文件
 notes.md
 request_detail/
-history/
+.lock/
+.reviewer_approved
+session.json
+
+# 日志文件（可选忽略）
+logs/trace.jsonl
+logs/error.jsonl
 
 # 建议提交的文件
 # project.md
 # request.md (可选)
 # todolist.md (可选)
 # docs/
+# history/
 EOF
     echo -e "  ✓ 创建 .gitignore"
+
+    # 创建空的 session.json 模板
+    cat > "$AGENTMEM_DIR/session.json.template" << 'EOF'
+{
+  "version": "2.8",
+  "created_at": "",
+  "updated_at": "",
+  "current_phase": 0,
+  "current_todo": null,
+  "status": "idle",
+  "history": []
+}
+EOF
+    echo -e "  ✓ 创建 session.json.template"
 }
 
 # 辅助函数：复制模板文件
 copy_template() {
     local src_name="$1"
     local dest_path="$2"
-    
+
     # 检查源模板是否存在
     if [ -f "$TEMPLATE_DIR/$src_name" ]; then
         if [ ! -f "$dest_path" ]; then
@@ -215,13 +263,13 @@ copy_template() {
 copy_rule_file() {
     local src="$SCRIPT_DIR/../$1"
     local dest="$2"
-    
+
     # 确保目标目录存在
     local dest_dir=$(dirname "$dest")
     if [ ! -d "$dest_dir" ]; then
         mkdir -p "$dest_dir"
     fi
-    
+
     # 替换规则：
     # {{SETUP_SCRIPT}} -> .agentmem/scripts/setup.sh (实际上 setup script 是 init 脚本的变体，这里指向辅助脚本)
     # Init 模式下，辅助脚本在 .agentmem/scripts/
@@ -229,9 +277,9 @@ copy_rule_file() {
     # {{EXAMPLE_DIR}}  -> .agentmem/examples
     # {{SCRIPT_DIR}}   -> .agentmem/scripts
     # {{DOCS_DIR}}     -> .agentmem/docs
-    
+
     local ASSETS_DIR=".agentmem"
-    
+
     process_and_copy() {
         sed -e "s|{{SETUP_SCRIPT}}|${ASSETS_DIR}/scripts/setup.sh|g" \
             -e "s|{{TEMPLATE_DIR}}|${ASSETS_DIR}/templates|g" \

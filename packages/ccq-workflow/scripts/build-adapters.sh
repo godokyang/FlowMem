@@ -1,12 +1,17 @@
 #!/bin/bash
 # ============================================================================
-# build-adapters.sh - FlowMem 适配器打包脚本
+# build-adapters.sh - FlowMem 适配器打包脚本 (v2.8)
 # ============================================================================
 # 功能:
-# 1. 读取 scripts/common-rules-template.md
+# 1. 读取 adapters/common-rules.md
 # 2. 针对不同工具（Claude, Cursor 等）替换路径占位符
-# 3. 将规则、模板、脚本打包到 dist/ 目录下的独立文件夹中
+# 3. 将规则、模板、脚本打包到 adapters/ 目录下的独立文件夹中
 # 4. 生成自包含的 "Copy-Paste Ready" 分发包
+#
+# v2.8 更新:
+# - 支持 Agent Prompt 模板 (templates/agents/)
+# - 支持 flowmem-guard.sh 脚本
+# - 支持 Claude Code hooks 配置示例
 # ============================================================================
 
 set -e
@@ -16,12 +21,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$SCRIPT_DIR/.."
 ADAPTERS_DIR="$ROOT_DIR/adapters"
 TEMPLATE_FILE="$ROOT_DIR/adapters/common-rules.md"
+TEMPLATES_DIR="$ROOT_DIR/templates"
+EXAMPLES_DIR="$ROOT_DIR/examples"
 
 # 清理构建目录（保留 common-rules.md）
 echo "清理旧的适配器包..."
 find "$ADAPTERS_DIR" -mindepth 1 -maxdepth 1 -type d -exec rm -rf {} +
 
-echo "构建 FlowMem 适配器包..."
+echo "构建 FlowMem v2.8 适配器包..."
 echo "目标目录: $ADAPTERS_DIR"
 
 # 辅助函数：构建标准适配器包 (Cursor, Windsurf, Trae, Cline 等)
@@ -30,25 +37,37 @@ build_standard_pack() {
     local name="$1"
     local rule_filename="$2"
     local assets_dir="$3" # e.g., ".flowmem" 或 ".cursor/flowmem"
-    
+
     local pack_dir="$ADAPTERS_DIR/$name"
     mkdir -p "$pack_dir"
     mkdir -p "$pack_dir/$assets_dir"
-    
+
     echo "📦 构建 $name 包..."
-    
+
     # 1. 复制静态资源 (Templates, Scripts, Examples)
-    cp -r "$ROOT_DIR/templates" "$pack_dir/$assets_dir/"
-    cp -r "$ROOT_DIR/examples" "$pack_dir/$assets_dir/"
-    # docs 在 templates 子目录下，已随 templates 复制
-    
+    if [ -d "$TEMPLATES_DIR" ]; then
+        cp -r "$TEMPLATES_DIR" "$pack_dir/$assets_dir/"
+        echo "  ✓ 复制模板目录 (含 agents/)"
+    fi
+
+    if [ -d "$EXAMPLES_DIR" ]; then
+        cp -r "$EXAMPLES_DIR" "$pack_dir/$assets_dir/"
+        echo "  ✓ 复制示例目录"
+    fi
+
     # 2. 复制并处理脚本 (setup.sh 及其他)
     mkdir -p "$pack_dir/$assets_dir/scripts"
-    cp "$SCRIPT_DIR/setup.sh" "$pack_dir/$assets_dir/scripts/"
-    cp "$SCRIPT_DIR/archive-task.sh" "$pack_dir/$assets_dir/scripts/"
-    cp "$SCRIPT_DIR/refresh-context.sh" "$pack_dir/$assets_dir/scripts/"
-    chmod +x "$pack_dir/$assets_dir/scripts/"*.sh
-    
+
+    # 复制基础脚本
+    [ -f "$SCRIPT_DIR/setup.sh" ] && cp "$SCRIPT_DIR/setup.sh" "$pack_dir/$assets_dir/scripts/"
+    [ -f "$SCRIPT_DIR/archive-task.sh" ] && cp "$SCRIPT_DIR/archive-task.sh" "$pack_dir/$assets_dir/scripts/"
+    [ -f "$SCRIPT_DIR/refresh-context.sh" ] && cp "$SCRIPT_DIR/refresh-context.sh" "$pack_dir/$assets_dir/scripts/"
+
+    # v2.8: 复制 flowmem-guard.sh
+    [ -f "$SCRIPT_DIR/flowmem-guard.sh" ] && cp "$SCRIPT_DIR/flowmem-guard.sh" "$pack_dir/$assets_dir/scripts/"
+
+    chmod +x "$pack_dir/$assets_dir/scripts/"*.sh 2>/dev/null || true
+
     # 3. 生成规则文件
     # 替换占位符为相对路径
     # {{SETUP_SCRIPT}} -> $assets_dir/scripts/setup.sh
@@ -56,14 +75,14 @@ build_standard_pack() {
     # {{EXAMPLE_DIR}}  -> $assets_dir/examples
     # {{SCRIPT_DIR}}   -> $assets_dir/scripts
     # {{DOCS_DIR}}     -> $assets_dir/docs
-    
+
     sed -e "s|{{SETUP_SCRIPT}}|$assets_dir/scripts/setup.sh|g" \
         -e "s|{{TEMPLATE_DIR}}|$assets_dir/templates|g" \
         -e "s|{{EXAMPLE_DIR}}|$assets_dir/examples|g" \
         -e "s|{{SCRIPT_DIR}}|$assets_dir/scripts|g" \
         -e "s|{{DOCS_DIR}}|$assets_dir/docs|g" \
         "$TEMPLATE_FILE" > "$pack_dir/$rule_filename"
-        
+
     echo "  ✓ 生成规则: $rule_filename"
     echo "  ✓ 复制资源到: $assets_dir/"
 }
@@ -113,11 +132,11 @@ rm -rf "$ADAPTERS_DIR/copilot-temp"
 echo "  ✓ 调整 Copilot 目录结构"
 
 # ============================================================================
-# 6. Claude Code Adapter (Self-Contained 设计)
+# 6. Claude Code Adapter (Self-Contained 设计) - v2.8 增强
 # 结构: 所有资源都在 .claude/skills/context-memory-system/ 内
 # 优势: 整个 Skill 目录可作为完整包，安装到项目级或全局级
 # ============================================================================
-echo "📦 构建 claude-code 包..."
+echo "📦 构建 claude-code 包 (v2.8)..."
 CLAUDE_PACK="$ADAPTERS_DIR/claude-code"
 CLAUDE_SKILL_DIR=".claude/skills/context-memory-system"
 FULL_PATH="$CLAUDE_PACK/$CLAUDE_SKILL_DIR"
@@ -125,19 +144,35 @@ FULL_PATH="$CLAUDE_PACK/$CLAUDE_SKILL_DIR"
 mkdir -p "$FULL_PATH"
 
 # 复制所有资源到 Skill 目录内（自包含设计）
-cp -r "$ROOT_DIR/templates" "$FULL_PATH/"
-cp -r "$ROOT_DIR/examples" "$FULL_PATH/"
+if [ -d "$TEMPLATES_DIR" ]; then
+    cp -r "$TEMPLATES_DIR" "$FULL_PATH/"
+    echo "  ✓ 复制模板目录 (含 agents/)"
+fi
+
+if [ -d "$EXAMPLES_DIR" ]; then
+    cp -r "$EXAMPLES_DIR" "$FULL_PATH/"
+    echo "  ✓ 复制示例目录"
+fi
+
 mkdir -p "$FULL_PATH/scripts"
-cp "$SCRIPT_DIR/setup.sh" "$FULL_PATH/scripts/"
-cp "$SCRIPT_DIR/archive-task.sh" "$FULL_PATH/scripts/"
-cp "$SCRIPT_DIR/refresh-context.sh" "$FULL_PATH/scripts/"
-chmod +x "$FULL_PATH/scripts/"*.sh
+[ -f "$SCRIPT_DIR/setup.sh" ] && cp "$SCRIPT_DIR/setup.sh" "$FULL_PATH/scripts/"
+[ -f "$SCRIPT_DIR/archive-task.sh" ] && cp "$SCRIPT_DIR/archive-task.sh" "$FULL_PATH/scripts/"
+[ -f "$SCRIPT_DIR/refresh-context.sh" ] && cp "$SCRIPT_DIR/refresh-context.sh" "$FULL_PATH/scripts/"
+[ -f "$SCRIPT_DIR/flowmem-guard.sh" ] && cp "$SCRIPT_DIR/flowmem-guard.sh" "$FULL_PATH/scripts/"
+chmod +x "$FULL_PATH/scripts/"*.sh 2>/dev/null || true
+
+# v2.8: 复制 Claude Code hooks 配置示例到 .claude/ 目录
+if [ -f "$EXAMPLES_DIR/claude-hooks-settings.json" ]; then
+    mkdir -p "$CLAUDE_PACK/.claude"
+    cp "$EXAMPLES_DIR/claude-hooks-settings.json" "$CLAUDE_PACK/.claude/settings.example.json"
+    echo "  ✓ 复制 hooks 配置示例"
+fi
 
 # 生成 YAML Frontmatter 并拼接规则
 DEST_FILE="$FULL_PATH/SKILL.md"
 echo "---" > "$DEST_FILE"
 echo "name: context-memory-system" >> "$DEST_FILE"
-echo "description: FlowMem 上下文记忆系统。使用持久化 Markdown 文件管理 AI 工作记忆，在开始复杂任务、多文件修改时自动激活。" >> "$DEST_FILE"
+echo "description: FlowMem 上下文记忆系统 v2.8。支持四阶段工作流、多 Agent 架构、偷懒检测与 Claude Code Hooks。" >> "$DEST_FILE"
 echo "autorun: true" >> "$DEST_FILE"
 echo "---" >> "$DEST_FILE"
 echo "" >> "$DEST_FILE"
@@ -161,4 +196,18 @@ echo "  ✓ 生成 Skill: $CLAUDE_SKILL_DIR/SKILL.md (Self-Contained)"
 build_standard_pack "gemini" "gemini-rules.md" ".flowmem"
 
 echo ""
-echo "🎉构建完成！请查看 adapters/ 目录。"
+echo "🎉 FlowMem v2.8 适配器构建完成！"
+echo ""
+echo "已生成的适配器包:"
+echo "  - cursor/      (.cursorrules)"
+echo "  - windsurf/    (.windsurfrules)"
+echo "  - cline/       (.clinerules)"
+echo "  - trae/        (.trae/rules/context-memory.md)"
+echo "  - copilot/     (.github/copilot-instructions.md)"
+echo "  - claude-code/ (.claude/skills/context-memory-system/)"
+echo "  - gemini/      (gemini-rules.md)"
+echo ""
+echo "v2.8 新增内容:"
+echo "  - Agent Prompt 模板 (templates/agents/)"
+echo "  - flowmem-guard.sh 脚本"
+echo "  - Claude Code hooks 配置示例"

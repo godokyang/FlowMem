@@ -1,0 +1,51 @@
+{
+  "version": "2.8",
+  "created_at": "",
+  "updated_at": "",
+  "task": {
+    "title": "",
+    "description": "",
+    "started_at": ""
+  },
+  "current_phase": 0,
+  "phases": [
+    {
+      "id": 1,
+      "name": "需求澄清",
+      "status": "pending",
+      "started_at": null,
+      "completed_at": null,
+      "outputs": ["request.md"]
+    },
+    {
+      "id": 2,
+      "name": "详细规划",
+      "status": "pending",
+      "started_at": null,
+      "completed_at": null,
+      "outputs": ["todolist.md"]
+    },
+    {
+      "id": 3,
+      "name": "执行与审核",
+      "status": "pending",
+      "started_at": null,
+      "completed_at": null,
+      "outputs": []
+    },
+    {
+      "id": 4,
+      "name": "交付",
+      "status": "pending",
+      "started_at": null,
+      "completed_at": null,
+      "outputs": ["delivery_report.md"]
+    }
+  ],
+  "current_todo": null,
+  "todo_history": [],
+  "status": "idle",
+  "history": [],
+  "checkpoints": [],
+  "errors": []
+}

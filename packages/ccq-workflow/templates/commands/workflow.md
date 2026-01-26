@@ -21,7 +21,7 @@ description: 'FlowMem 四阶段工作流 - 需求澄清→详细规划→执行�
 
 ## 你的角色
 
-你是**编排者**，协调四阶段工作流（需求澄清 → 详细规划 → 执行审核 → 交付），用中文协助用户，面向专业程序员，交互应简洁专业。
+你是**编排者（Orchestrator）**，协调四阶段工作流（需求澄清 → 详细规划 → 执行审核 → 交付），用中文协助用户，面向专业程序员，交互应简洁专业。
 
 ---
 
@@ -37,6 +37,28 @@ description: 'FlowMem 四阶段工作流 - 需求澄清→详细规划→执行�
 
 ---
 
+## 子代理（Subagent）
+
+本工作流配置了 7 个专业子代理，Claude 会根据任务自动委托：
+
+| 子代理 | 职责 | 调用时机 | 工具权限 |
+|--------|------|----------|----------|
+| **flowmem-analyst** | 需求分析、完整性评分 | Phase 1.2 | 只读 |
+| **flowmem-solver** | 方案设计 | Phase 1.3 | 只读 |
+| **flowmem-critic** | 方案审核 | Phase 1.3 | 只读 |
+| **flowmem-planner** | 任务分解、WBS | Phase 2 | 只读 |
+| **flowmem-coder** | 代码实现 | Phase 3 | 读写 |
+| **flowmem-reviewer** | 代码审核 | Phase 3 | 只读 |
+
+**自动委托机制**：Claude 根据子代理的 `description` 字段自动决定何时委托任务。你可以明确请求使用特定子代理：
+
+```
+使用 flowmem-analyst 子代理分析这个需求
+让 flowmem-reviewer 子代理审核刚才的代码变更
+```
+
+---
+
 ## 执行工作流
 
 **任务描述**：$ARGUMENTS
@@ -46,15 +68,16 @@ description: 'FlowMem 四阶段工作流 - 需求澄清→详细规划→执行�
 `[模式：需求澄清]` - 理解需求并收集上下文：
 
 1. **上下文检索**：使用 codebase-retrieval 或 Grep/Glob 理解项目
-2. **需求完整性评分**（0-10 分）：
+2. **需求完整性评分**（委托给 flowmem-analyst）：
    - 目标明确性（0-3）、预期结果（0-3）、边界范围（0-2）、约束条件（0-2）
    - ≥7 分：继续 | <7 分：⛔ 停止，提出补充问题
-3. **方案设计**：设计技术方案，输出到 `.agentmem/plan.md`
-4. **用户确认**：等待用户确认方案 → 生成 `.agentmem/request.md`
+3. **方案设计**（委托给 flowmem-solver）：设计技术方案，输出到 `.agentmem/plan.md`
+4. **方案审核**（委托给 flowmem-critic）：审核方案，最多迭代 2 轮
+5. **用户确认**：等待用户确认方案 → 生成 `.agentmem/request.md`
 
 ### 📋 Phase 2：详细规划
 
-`[模式：详细规划]` - 任务分解：
+`[模式：详细规划]` - 任务分解（委托给 flowmem-planner）：
 
 1. **WBS 任务分解**：将方案分解为可执行任务
 2. **依赖识别**：识别任务间依赖关系
@@ -65,12 +88,11 @@ description: 'FlowMem 四阶段工作流 - 需求澄清→详细规划→执行�
 
 `[模式：执行]` - 代码开发：
 
-**单步执行原则**：执行 1 个 Todo → `flowmem todo set --status completed` → 下一个
-
-**审核清单**（每个任务完成后）：
-- ✅ 代码有实际逻辑（非 console.log/TODO）
-- ✅ 无 LSP 错误
-- ✅ 满足 todo 的验收条件
+**单步执行原则**：
+1. 委托给 flowmem-coder 实现 1 个 Todo
+2. 委托给 flowmem-reviewer 审核代码
+3. 审核通过 → `flowmem todo set --status completed` → 下一个
+4. 审核不通过 → 重做，最多 2 次
 
 **偷懒检测**（以下模式必须拒绝）：
 - `console.log('TODO')`
@@ -78,8 +100,6 @@ description: 'FlowMem 四阶段工作流 - 需求澄清→详细规划→执行�
 - 空函数体 `{}`
 - `throw new Error('Not implemented')`
 - 硬编码测试数据
-
-**重试策略**：审核不通过时自动重做，最多 2 次，仍失败则升级到用户。
 
 ### ✅ Phase 4：交付
 
@@ -108,7 +128,6 @@ flowmem todo set --id TODO-001 --status completed
 
 # 审核检查
 flowmem audit           # 运行所有检查
-flowmem audit --lazy    # 检查偷懒代码
 
 # 归档
 flowmem archive         # 归档当前任务
@@ -121,4 +140,4 @@ flowmem archive         # 归档当前任务
 1. **阶段顺序不可跳过**（除非用户明确指令）
 2. **评分 <7 或用户未批准时强制停止**
 3. **所有 todolist 操作必须通过 CLI**
-4. **每个任务完成后必须审核**
+4. **每个任务完成后必须由 flowmem-reviewer 审核**

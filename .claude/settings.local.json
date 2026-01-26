@@ -9,7 +9,8 @@
       "Bash(DEBUG=1 node:*)",
       "Bash(npm install @inquirer/select --save)",
       "Bash(timeout 3 node:*)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "Bash(npx flowmem build-adapters:*)"
     ]
   }
 }

@@ -61,13 +61,25 @@ function copyDir(src: string, dest: string): void {
   }
 }
 
+// Claude Code Agent 列表
+const CLAUDE_AGENTS = [
+  'analyst',
+  'solver',
+  'critic',
+  'planner',
+  'coder',
+  'reviewer',
+  'context-curator'
+];
+
 /**
- * 构建 Claude Code 适配器包（commands 模式）
+ * 构建 Claude Code 适配器包（commands + agents 模式）
  */
 function buildClaudeCodePack(
   adapter: AdapterConfig,
   rootDir: string,
   commandsTemplateDir: string,
+  agentsTemplateDir: string,
   examplesDir: string
 ): void {
   const packDir = path.join(rootDir, 'adapters', adapter.name);
@@ -79,7 +91,7 @@ function buildClaudeCodePack(
 
   ensureDir(packDir);
 
-  console.log(`📦 构建 ${adapter.name} 包（commands 模式）...`);
+  console.log(`📦 构建 ${adapter.name} 包（commands + agents 模式）...`);
 
   // 创建 .claude/commands/flowmem/ 目录
   const commandsDir = path.join(packDir, '.claude', 'commands', 'flowmem');
@@ -100,6 +112,25 @@ function buildClaudeCodePack(
     }
   }
 
+  // 创建 .claude/agents/ 目录（直接放在 agents 下，不需要 flowmem 子目录）
+  const agentsDir = path.join(packDir, '.claude', 'agents');
+  ensureDir(agentsDir);
+
+  // 复制 agent 模板
+  let agentCount = 0;
+  for (const agent of CLAUDE_AGENTS) {
+    const srcFile = path.join(agentsTemplateDir, `${agent}.md`);
+    const destFile = path.join(agentsDir, `flowmem-${agent}.md`);
+
+    if (fs.existsSync(srcFile)) {
+      fs.copyFileSync(srcFile, destFile);
+      console.log(`  ✓ 复制 Agent: flowmem-${agent}`);
+      agentCount++;
+    } else {
+      console.log(`  ⚠ Agent 模板不存在: ${agent}.md`);
+    }
+  }
+
   // 复制 hooks 配置示例
   const hooksExample = path.join(examplesDir, 'claude-hooks-settings.json');
   if (fs.existsSync(hooksExample)) {
@@ -108,7 +139,7 @@ function buildClaudeCodePack(
     console.log('  ✓ 复制 hooks 配置示例');
   }
 
-  console.log(`  ✓ 生成 ${cmdCount} 个命令`);
+  console.log(`  ✓ 生成 ${cmdCount} 个命令, ${agentCount} 个 Agent`);
 }
 
 /**
@@ -179,6 +210,7 @@ export const buildAdaptersCommand = new Command('build-adapters')
     const templateFile = path.join(adaptersDir, 'common-rules.md');
     const templatesDir = path.join(rootDir, 'templates');
     const commandsTemplateDir = path.join(templatesDir, 'commands');
+    const agentsTemplateDir = path.join(templatesDir, 'agents');
     const examplesDir = path.join(rootDir, 'examples');
 
     console.log('🚀 构建 FlowMem v2.8 适配器包...\n');
@@ -207,8 +239,8 @@ export const buildAdaptersCommand = new Command('build-adapters')
 
     for (const adapter of adaptersToBuild) {
       if (adapter.useCommands) {
-        // Claude Code 使用 commands 模式
-        buildClaudeCodePack(adapter, rootDir, commandsTemplateDir, examplesDir);
+        // Claude Code 使用 commands + agents 模式
+        buildClaudeCodePack(adapter, rootDir, commandsTemplateDir, agentsTemplateDir, examplesDir);
       } else {
         // 其他适配器使用 common-rules.md
         buildStandardPack(adapter, rootDir, templateContent, templatesDir, examplesDir);
@@ -219,13 +251,13 @@ export const buildAdaptersCommand = new Command('build-adapters')
     console.log('已生成的适配器包:');
     for (const adapter of adaptersToBuild) {
       if (adapter.useCommands) {
-        console.log(`  - ${adapter.name}/ (commands 模式: /flowmem:*)`);
+        console.log(`  - ${adapter.name}/ (commands + agents 模式: /flowmem:*)`);
       } else {
         console.log(`  - ${adapter.name}/ (${adapter.ruleFile})`);
       }
     }
 
     console.log('\n数据源:');
-    console.log('  - Claude Code: templates/commands/*.md');
+    console.log('  - Claude Code: templates/commands/*.md + templates/agents/*.md');
     console.log('  - 其他 IDE: adapters/common-rules.md');
   });

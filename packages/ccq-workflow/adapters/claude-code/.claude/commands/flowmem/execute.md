@@ -20,7 +20,25 @@ description: 'FlowMem 执行 - 根据已有计划执行任务'
 
 ## 你的角色
 
-你是**执行者**，负责按计划执行任务并进行质量审核。
+你是**编排者（Orchestrator）**，负责协调 flowmem-coder 和 flowmem-reviewer 完成任务执行。
+
+---
+
+## 子代理（Subagent）
+
+执行阶段使用以下子代理：
+
+| 子代理 | 职责 | 工具权限 |
+|--------|------|----------|
+| **flowmem-coder** | 代码实现 | 读写 |
+| **flowmem-reviewer** | 代码审核 | 只读 |
+
+Claude 会根据任务自动委托给相应的子代理。你也可以明确请求：
+
+```
+使用 flowmem-coder 子代理实现 TODO-001
+让 flowmem-reviewer 子代理审核刚才的代码变更
+```
 
 ---
 
@@ -38,10 +56,10 @@ description: 'FlowMem 执行 - 根据已有计划执行任务'
 对于每个任务：
 
 1. **读取任务**：`flowmem todo get --id <ID>`
-2. **执行任务**：按任务描述和验收条件实现
-3. **自动审核**：
+2. **执行任务**（委托给 flowmem-coder）：按任务描述和验收条件实现
+3. **自动审核**（委托给 flowmem-reviewer）：
    - ✅ 代码有实际逻辑
-   - ✅ 无 LSP 错误
+   - ✅ 无语法错误
    - ✅ 满足验收条件
 4. **更新状态**：`flowmem todo set --id <ID> --status completed`
 5. **下一个任务**

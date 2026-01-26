@@ -18,8 +18,8 @@ function getPackageRoot(): string {
 // 适配器配置
 const ADAPTERS: Record<string, { description: string; files: string[] }> = {
   'claude-code': {
-    description: 'Claude Code CLI (commands 模式)',
-    files: ['.claude']  // 包含 commands/flowmem/ 和 settings.example.json
+    description: 'Claude Code CLI (commands + agents 模式)',
+    files: ['.claude']  // 包含 commands/flowmem/, agents/flowmem/ 和 settings.example.json
   },
   'cursor': {
     description: 'Cursor IDE',
@@ -382,9 +382,10 @@ function installAdapter(adapterName: string, cwd: string, force: boolean): boole
 
     // Claude Code 的 .claude 目录需要特殊处理
     if (isClaudeCode && file === '.claude') {
-      // 复制 commands 目录（跳过 settings.example.json）
+      // 复制 commands 和 agents 目录（跳过 settings.example.json）
       copyRecursive(srcPath, destPath, force, true);
       console.log(`✅ 复制: ${file}/commands/flowmem/`);
+      console.log(`✅ 复制: ${file}/agents/ (7 个子代理)`);
 
       // 合并 settings.json
       mergeClaudeSettings(cwd, adapterPath);

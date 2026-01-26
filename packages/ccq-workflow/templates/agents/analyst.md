@@ -18,11 +18,11 @@ model: sonnet
 | **用户原始需求** | Orchestrator 传递 | 用户描述的功能需求 |
 | **代码检索结果** | Orchestrator 传递 | 相关代码片段和文件 |
 | **项目配置** | `.agentmem/project.md`（如存在） | 项目级约束和规范 |
-| **上下文摘要** | `.agentmem/context.md`（如存在） | context-curator 整理的精简上下文 |
+| **上下文摘要** | `.agentmem/context/index.md`（如存在） | context-curator 整理的上下文索引 |
 
 **如何获取上下文**：
 1. Orchestrator 会在调用你时提供用户需求和检索结果
-2. **优先**检查 `.agentmem/context.md` 是否存在，如存在则优先使用
+2. **优先**检查 `.agentmem/context/index.md` 是否存在，如存在则优先使用（按需读取模块文件）
 3. 使用 `Read` 工具读取 `.agentmem/project.md` 了解项目约束
 4. 如需补充信息，使用 `Glob` 和 `Grep` 工具检索
 

@@ -72,7 +72,7 @@ description: 'FlowMem 四阶段工作流 - 需求澄清→详细规划→执行�
 1. **上下文检索**：使用 codebase-retrieval 或 Grep/Glob 理解项目
 2. **上下文整理**（可选，委托给 flowmem-context-curator）：
    - 检查触发条件：token > 60% / 文件 > 15 / 目录 ≥ 3 / 单文件 > 500 行
-   - 满足则委托整理，输出到 `.agentmem/context.md`
+   - 满足则委托整理，输出到 `.agentmem/context/` 目录（按模块拆分）
 3. **需求完整性评分**（委托给 flowmem-analyst）：
    - 目标明确性（0-3）、预期结果（0-3）、边界范围（0-2）、约束条件（0-2）
    - ≥7 分：继续 | <7 分：⛔ 停止，提出补充问题

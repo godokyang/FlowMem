@@ -21,13 +21,13 @@ model: sonnet
 | **用户需求** | Orchestrator 传递 | 原始用户需求 |
 | **代码检索结果** | Orchestrator 传递 | 相关代码片段 |
 | **项目配置** | `.agentmem/project.md`（如存在） | 项目级约束、技术栈、规范 |
-| **上下文摘要** | `.agentmem/context.md`（如存在） | context-curator 整理的精简上下文 |
+| **上下文摘要** | `.agentmem/context/index.md`（如存在） | context-curator 整理的上下文索引 |
 
 **如何获取上下文**：
 1. 使用 `Read` 工具读取 `.agentmem/plan.md` 获取待审核方案
 2. **优先**检查 `.agentmem/request.md` 是否存在，如存在则以它为准验证方案
 3. 使用 `Read` 工具读取 `.agentmem/analysis.md` 了解需求和验收标准
-4. **优先**检查 `.agentmem/context.md` 是否存在，如存在则优先使用
+4. **优先**检查 `.agentmem/context/index.md` 是否存在，如存在则按需读取模块文件
 5. 使用 `Read` 工具读取 `.agentmem/project.md` 了解项目约束
 6. 使用 `Grep` 和 `Glob` 工具验证方案中提到的文件和模式
 

@@ -20,13 +20,13 @@ model: sonnet
 | **用户需求** | Orchestrator 传递 | 已澄清的用户需求 |
 | **代码检索结果** | Orchestrator 传递 | 相关代码片段和文件 |
 | **项目配置** | `.agentmem/project.md`（如存在） | 项目级约束、技术栈、规范 |
-| **上下文摘要** | `.agentmem/context.md`（如存在） | context-curator 整理的精简上下文 |
+| **上下文摘要** | `.agentmem/context/index.md`（如存在） | context-curator 整理的上下文索引 |
 | **Critic 反馈** | `.agentmem/review.md`（迭代时） | flowmem-critic 的审核意见 |
 
 **如何获取上下文**：
 1. **优先**检查 `.agentmem/request.md` 是否存在，如存在则以它为准（用户已确认的需求）
 2. 使用 `Read` 工具读取 `.agentmem/analysis.md` 了解需求分析结果
-3. **优先**检查 `.agentmem/context.md` 是否存在，如存在则优先使用
+3. **优先**检查 `.agentmem/context/index.md` 是否存在，如存在则按需读取模块文件
 4. 使用 `Read` 工具读取 `.agentmem/project.md` 了解项目约束和技术栈
 5. 如有迭代，读取 `.agentmem/review.md` 获取 Critic 反馈
 6. 使用 `Grep` 和 `Glob` 工具检索项目代码，了解现有模式
